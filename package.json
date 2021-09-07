@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start-dev": "nodemon server.js",
-    "start-peerjs": "peerjs --sslkey learn-webrtc.lan-key.pem --sslcert learn-webrtc.lan.pem --port 3001"
+    "start-peerjs": "peerjs --port 3001"
   },
   "author": "",
   "license": "ISC",
