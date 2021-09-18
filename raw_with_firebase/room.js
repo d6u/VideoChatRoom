@@ -62,7 +62,7 @@ async function initRoom(db, roomId) {
 
     onChildAdded(peersRef, async (snap) => {
       console.log(`new peer added: key = ${snap.key}`);
-      answerCall(localStream, snap.ref);
+      answerCall(localStream, videoStack, snap.ref);
     });
 
     onValue(clientsRef, async (snap) => {
@@ -72,7 +72,7 @@ async function initRoom(db, roomId) {
         }
 
         console.log(`found exiting client (key = ${clientSnap.key}), joining...`);
-        await offerCall(localStream, roomRef, currentClientRef, clientSnap.ref);
+        await offerCall(localStream, videoStack, roomRef, currentClientRef, clientSnap.ref);
       });
     }, { onlyOnce: true });
   });
@@ -81,7 +81,7 @@ async function initRoom(db, roomId) {
   roomPageContainer.style.display = 'block';
 }
 
-async function offerCall(localStream, roomRef, currentClientRef, targetClientRef) {
+async function offerCall(localStream, videoStack, roomRef, currentClientRef, targetClientRef) {
   const pc = new RTCPeerConnection(SERVERS);
 
   localStream.getTracks().forEach((track) => {
@@ -89,7 +89,7 @@ async function offerCall(localStream, roomRef, currentClientRef, targetClientRef
   });
 
   pc.ontrack = event => {
-    addVideo(event.streams[0]);
+    addVideo(videoStack, targetClientRef.key, event.streams[0]);
   };
 
   const peerRef = child(targetClientRef, `peers/${currentClientRef.key}`);
@@ -127,7 +127,7 @@ async function offerCall(localStream, roomRef, currentClientRef, targetClientRef
   });
 }
 
-async function answerCall(localStream, peerRef) {
+async function answerCall(localStream, videoStack, peerRef) {
   const pc = new RTCPeerConnection(SERVERS);
 
   localStream.getTracks().forEach((track) => {
@@ -135,7 +135,7 @@ async function answerCall(localStream, peerRef) {
   });
 
   pc.ontrack = event => {
-    addVideo(event.streams[0]);
+    addVideo(videoStack, peerRef.key, event.streams[0]);
   };
 
   const offerRef = child(peerRef, `offer`);
@@ -169,23 +169,16 @@ async function answerCall(localStream, peerRef) {
   });
 }
 
-async function addVideo(stream) {
-  // stream.getTracks().forEach(track => {
-  //   const remoteId = track.kind + track.label;
-  //   remoteStream.addTrack(track);
-  // });
-
-  // const video = Array.from(document.querySelectorAll('.remote-video')).find(video => {
-  //   return video.dataset.remoteId;
-  // });
-
-  const video = Array.from(document.querySelectorAll('.remote-video'))[0];
+async function addVideo(videoStack, clientKey, stream) {
+  const video = videoStack.getVideoIfAvailable(clientKey);
+  if (!video) {
+    return;
+  }
 
   const remoteStream = new MediaStream();
   video.srcObject = remoteStream;
 
   stream.getTracks().forEach(track => {
-    const remoteId = track.kind + track.label;
     remoteStream.addTrack(track);
   });
 }

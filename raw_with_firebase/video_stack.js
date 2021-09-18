@@ -6,19 +6,15 @@ export default class VideoStack {
     this.videos_ = Array.from(document.querySelectorAll('.remote-video'));
   }
 
-  getVailableVideo(clientKey) {
-    const video = this.top_();
+  getVideoIfAvailable(clientKey) {
+    let video = this.videoPairs_[clientKey];
+    if (!video) {
+      video = this.top_();
+    }
     if (!video) {
       return null;
     }
     this.videoPairs_[clientKey] = video;
-    return this.videoPairs_[clientKey];
-  }
-
-  getVideo(clientKey) {
-    if (!this.videoPairs_[clientKey]) {
-      return null;
-    }
     return this.videoPairs_[clientKey];
   }
 
@@ -33,6 +29,6 @@ export default class VideoStack {
     if (!this.videos_.length) {
       return null;
     }
-    return this.videos_.unshift();
+    return this.videos_.shift();
   }
 }
