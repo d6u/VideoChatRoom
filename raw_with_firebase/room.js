@@ -79,6 +79,11 @@ async function initRoom(db, roomId) {
     }, { onlyOnce: true });
   });
 
+  const debugInfoContainer = document.querySelector('#debug-info');
+  onValue(roomRef, async (snap) => {
+    debugInfoContainer.innerHTML = JSON.stringify(snap.val(), null, 4);
+  });
+
   const roomPageContainer = document.querySelector('#room-page');
   roomPageContainer.style.display = 'block';
 }
