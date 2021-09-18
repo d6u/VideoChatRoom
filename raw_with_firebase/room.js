@@ -14,24 +14,20 @@ async function initRoom(db, callId) {
 
   const webcamVideo = document.querySelector('#webcamVideo');
   webcamVideo.muted = true; // Avoid echo on local video
-  const remoteVideo = document.querySelector('#remoteVideo');
 
   // const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  const remoteStream = new MediaStream();
 
   localStream.getTracks().forEach((track) => {
     pc.addTrack(track, localStream);
   });
 
   pc.ontrack = event => {
-    event.streams[0].getTracks().forEach(track => {
-      remoteStream.addTrack(track);
-    });
+    console.log(event.track);
+    addVideo(event.streams[0]);
   };
 
   webcamVideo.srcObject = localStream;
-  remoteVideo.srcObject = remoteStream;
 
   const callCol = collection(db, 'calls');
   const callDoc = doc(callCol, callId);
@@ -120,6 +116,25 @@ async function joinCall(pc, db, callCol, callDoc) {
       }
     });
   });
+}
+
+async function addVideo(stream) {
+  // stream.getTracks().forEach(track => {
+  //   const remoteId = track.kind + track.label;
+  //   remoteStream.addTrack(track);
+  // });
+
+  // const video = Array.from(document.querySelectorAll('.remote-video')).find(video => {
+  //   return video.dataset.remoteId;
+  // });
+
+  // const remoteStream = new MediaStream();
+  // video.srcObject = remoteStream;
+
+  // stream.getTracks().forEach(track => {
+  //   const remoteId = track.kind + track.label;
+  //   remoteStream.addTrack(track);
+  // });
 }
 
 export default function (db) {
