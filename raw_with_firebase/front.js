@@ -8,7 +8,7 @@ export default function (db) {
   createRoomButton.onclick = async (event) => {
     const roomsRef = ref(db, 'rooms');
     const room = push(roomsRef);
-    await set(room, { key: room.key });
+    await set(room, { clientsCount: 0 });
     location.pathname = '/' + room.key;
   };
 }

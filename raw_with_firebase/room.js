@@ -1,15 +1,29 @@
-import { ref, onValue, push, onDisconnect, set, child, get, onChildAdded, update } from "firebase/database";
+import { ref, onValue, push, onDisconnect, set, child, get, onChildAdded, onChildRemoved, update, increment } from "firebase/database";
+import VideoStack from "./video_stack";
+import { SERVERS } from './config';
 
-const SERVERS = {
-  iceServers: [
-    {
-      urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302']
-    }
-  ],
-  iceCandidatePoolSize: 10,
-};
+export default function (db, roomId) {
+  const confirmJoinRoomButton = document.querySelector('#confirm-join-room-btn');
+  const roomPageConfirmJoinContainer = document.querySelector('#room-page-confirm-join');
+  const roomPageJoiningContainer = document.querySelector('#room-page-joining');
+
+  confirmJoinRoomButton.innerHTML = `Join room <pre class="confirm-join-room-btn-room-id">${roomId}</pre>`;
+
+  confirmJoinRoomButton.onclick = async (event) => {
+    roomPageConfirmJoinContainer.style.display = 'none';
+    roomPageJoiningContainer.style.display = 'flex';
+
+    await initRoom(db, roomId);
+
+    roomPageJoiningContainer.style.display = 'none';
+  };
+
+  roomPageConfirmJoinContainer.style.display = 'flex';
+}
 
 async function initRoom(db, roomId) {
+  const videoStack = new VideoStack();
+
   const webcamVideo = document.querySelector('#webcamVideo');
   webcamVideo.muted = true; // Avoid echo on local video
 
@@ -17,44 +31,57 @@ async function initRoom(db, roomId) {
   webcamVideo.srcObject = localStream;
 
   const roomRef = ref(db, `rooms/${roomId}`);
-  const room = await get(roomRef);
+  const roomSnap = await get(roomRef);
 
-  if (!room.exists()) {
+  if (!roomSnap.exists()) {
     alert("Room doesn't exit.");
     return;
   }
 
-  const clientsRef = ref(db, `rooms/${roomId}/clients`);
-  const clients = await get(clientsRef);
+  const clientsRef = child(roomRef, `clients`);
 
-  if (clients.exists()) {
-    for (const clientKey of Object.keys(clients.val())) {
-      await createCall(db, roomId, clientKey, localStream);
+  onValue(ref(db, '.info/connected'), async (snap) => {
+    if (!snap.val()) {
+      return;
     }
-  } else {
-    onValue(ref(db, '.info/connected'), async (snap) => {
-      if (snap.val()) {
-        const clientRef = push(clientsRef);
-        onDisconnect(clientRef).remove();
-        set(clientRef, true);
 
-        const offerRef = child(clientRef, `offer`);
-        onValue(offerRef, async (snap) => {
-          console.log('offer changed', snap.exists(), snap.val());
-          if (snap.exists() && snap.val()) {
-            const offer = snap.val();
-            joinCall(db, roomId, clientRef, offer, localStream);
-          }
-        });
-      }
+    const currentClientRef = push(clientsRef);
+
+    // disconnect hooks
+    onDisconnect(currentClientRef).remove();
+    onDisconnect(roomRef).update({ clientsCount: increment(-1) });
+
+    await update(roomRef, { clientsCount: increment(1) });
+    await set(currentClientRef, { isOnline: true });
+
+    onChildRemoved(clientsRef, async (snap) => {
+      console.log(`client offlien: key = ${snap.key}`);
     });
-  }
+
+    const peersRef = child(currentClientRef, `peers`);
+
+    onChildAdded(peersRef, async (snap) => {
+      console.log(`new peer added: key = ${snap.key}`);
+      answerCall(localStream, snap.ref);
+    });
+
+    onValue(clientsRef, async (snap) => {
+      snap.forEach(async (clientSnap) => {
+        if (clientSnap.key === currentClientRef.key) {
+          return;
+        }
+
+        console.log(`found exiting client (key = ${clientSnap.key}), joining...`);
+        await offerCall(localStream, roomRef, currentClientRef, clientSnap.ref);
+      });
+    }, { onlyOnce: true });
+  });
 
   const roomPageContainer = document.querySelector('#room-page');
   roomPageContainer.style.display = 'block';
 }
 
-async function createCall(db, roomId, clientKey, localStream) {
+async function offerCall(localStream, roomRef, currentClientRef, targetClientRef) {
   const pc = new RTCPeerConnection(SERVERS);
 
   localStream.getTracks().forEach((track) => {
@@ -65,10 +92,10 @@ async function createCall(db, roomId, clientKey, localStream) {
     addVideo(event.streams[0]);
   };
 
-  const clientRef = ref(db, `rooms/${roomId}/clients/${clientKey}`);
-  const answerRef = child(clientRef, `answer`);
-  const offerCandidatesRef = child(clientRef, `offerCandidates`);
-  const answerCandidatesRef = child(clientRef, `answerCandidates`);
+  const peerRef = child(targetClientRef, `peers/${currentClientRef.key}`);
+  const offerCandidatesRef = child(peerRef, `offerCandidates`);
+  const answerRef = child(peerRef, `answer`);
+  const answerCandidatesRef = child(peerRef, `answerCandidates`);
 
   pc.onicecandidate = async (event) => {
     if (event.candidate) {
@@ -80,28 +107,27 @@ async function createCall(db, roomId, clientKey, localStream) {
   const offerDescription = await pc.createOffer();
   await pc.setLocalDescription(offerDescription);
 
-  const offer = {
-    type: offerDescription.type,
-    sdp: offerDescription.sdp,
-  };
+  await update(peerRef, {
+    offer: {
+      type: offerDescription.type,
+      sdp: offerDescription.sdp,
+    }
+  });
 
-  await update(clientRef, { offer });
-
-  onValue(answerRef, (snap) => {
-    console.log('answer changed', snap.exists(), snap.val());
+  onValue(answerRef, async (snap) => {
+    console.log('answer changed', snap.val());
     if (!pc.currentRemoteDescription && snap.exists()) {
-      const answerDescription = new RTCSessionDescription(snap.val());
-      pc.setRemoteDescription(answerDescription);
+      pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
     }
   });
 
   onChildAdded(answerCandidatesRef, snap => {
-    console.log('answer candidate added', snap.exists(), snap.val());
+    console.log('answer candidate added', snap.val());
     pc.addIceCandidate(new RTCIceCandidate(snap.val()));
   });
 }
 
-async function joinCall(db, roomId, clientRef, offer, localStream) {
+async function answerCall(localStream, peerRef) {
   const pc = new RTCPeerConnection(SERVERS);
 
   localStream.getTracks().forEach((track) => {
@@ -112,8 +138,9 @@ async function joinCall(db, roomId, clientRef, offer, localStream) {
     addVideo(event.streams[0]);
   };
 
-  const offerCandidatesRef = child(clientRef, `offerCandidates`);
-  const answerCandidatesRef = child(clientRef, `answerCandidates`);
+  const offerRef = child(peerRef, `offer`);
+  const offerCandidatesRef = child(peerRef, `offerCandidates`);
+  const answerCandidatesRef = child(peerRef, `answerCandidates`);
 
   pc.onicecandidate = async (event) => {
     if (event.candidate) {
@@ -122,20 +149,22 @@ async function joinCall(db, roomId, clientRef, offer, localStream) {
     }
   };
 
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const offerSnap = await get(offerRef);
+
+  await pc.setRemoteDescription(new RTCSessionDescription(offerSnap.val()));
 
   const answerDescription = await pc.createAnswer();
   await pc.setLocalDescription(answerDescription);
 
-  const answer = {
-    type: answerDescription.type,
-    sdp: answerDescription.sdp,
-  };
+  await update(peerRef, {
+    answer: {
+      type: answerDescription.type,
+      sdp: answerDescription.sdp,
+    }
+  });
 
-  await update(clientRef, { answer });
-
-  onChildAdded(offerCandidatesRef, (snap) => {
-    console.log('offer candidate added', snap.exists(), snap.val());
+  onChildAdded(offerCandidatesRef, async (snap) => {
+    console.log('offer candidate added', snap.val());
     pc.addIceCandidate(new RTCIceCandidate(snap.val()));
   });
 }
@@ -159,22 +188,4 @@ async function addVideo(stream) {
     const remoteId = track.kind + track.label;
     remoteStream.addTrack(track);
   });
-}
-
-export default function (db, roomId) {
-  const confirmJoinRoomButton = document.querySelector('#confirm-join-room-btn');
-  const roomPageConfirmJoinContainer = document.querySelector('#room-page-confirm-join');
-
-  confirmJoinRoomButton.innerHTML = `Join room <pre class="confirm-join-room-btn-room-id">${roomId}</pre>`;
-  confirmJoinRoomButton.onclick = async (event) => {
-    roomPageConfirmJoinContainer.style.display = 'none';
-    const roomPageJoiningContainer = document.querySelector('#room-page-joining');
-    roomPageJoiningContainer.display = 'block';
-
-    await initRoom(db, roomId);
-
-    roomPageJoiningContainer.display = 'none';
-  };
-
-  roomPageConfirmJoinContainer.style.display = 'flex';
 }

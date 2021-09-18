@@ -29,3 +29,7 @@
 .local-video {
   border: 5px solid #198754;
 }
+
+.joining-room-spinner {
+  margin-top: 100px;
+}
