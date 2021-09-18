@@ -1,4 +1,4 @@
-import { collection, doc, addDoc, getDoc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { ref, onValue, push, onDisconnect, set, child, get, onChildAdded, update } from "firebase/database";
 
 const SERVERS = {
   iceServers: [
@@ -9,47 +9,71 @@ const SERVERS = {
   iceCandidatePoolSize: 10,
 };
 
-async function initRoom(db, callId) {
-  const pc = new RTCPeerConnection(SERVERS);
-
+async function initRoom(db, roomId) {
   const webcamVideo = document.querySelector('#webcamVideo');
   webcamVideo.muted = true; // Avoid echo on local video
 
-  // const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-
-  localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
-  });
-
-  pc.ontrack = event => {
-    console.log(event.track);
-    addVideo(event.streams[0]);
-  };
-
   webcamVideo.srcObject = localStream;
 
-  const callCol = collection(db, 'calls');
-  const callDoc = doc(callCol, callId);
-  const callSnap = await getDoc(callDoc);
+  const roomRef = ref(db, `rooms/${roomId}`);
+  const room = await get(roomRef);
 
-  if (callSnap.exists()) {
-    await joinCall(pc, db, callCol, callDoc);
+  if (!room.exists()) {
+    alert("Room doesn't exit.");
+    return;
+  }
+
+  const clientsRef = ref(db, `rooms/${roomId}/clients`);
+  const clients = await get(clientsRef);
+
+  if (clients.exists()) {
+    for (const clientKey of Object.keys(clients.val())) {
+      await createCall(db, roomId, clientKey, localStream);
+    }
   } else {
-    await createCall(pc, db, callCol, callDoc);
+    onValue(ref(db, '.info/connected'), async (snap) => {
+      if (snap.val()) {
+        const clientRef = push(clientsRef);
+        onDisconnect(clientRef).remove();
+        set(clientRef, true);
+
+        const offerRef = child(clientRef, `offer`);
+        onValue(offerRef, async (snap) => {
+          console.log('offer changed', snap.exists(), snap.val());
+          if (snap.exists() && snap.val()) {
+            const offer = snap.val();
+            joinCall(db, roomId, clientRef, offer, localStream);
+          }
+        });
+      }
+    });
   }
 
   const roomPageContainer = document.querySelector('#room-page');
   roomPageContainer.style.display = 'block';
 }
 
-async function createCall(pc, db, callCol, callDoc) {
-  const offerCandidates = collection(callCol, callDoc.id, 'offerCandidates');
-  const answerCandidates = collection(callCol, callDoc.id, 'answerCandidates');
+async function createCall(db, roomId, clientKey, localStream) {
+  const pc = new RTCPeerConnection(SERVERS);
+
+  localStream.getTracks().forEach((track) => {
+    pc.addTrack(track, localStream);
+  });
+
+  pc.ontrack = event => {
+    addVideo(event.streams[0]);
+  };
+
+  const clientRef = ref(db, `rooms/${roomId}/clients/${clientKey}`);
+  const answerRef = child(clientRef, `answer`);
+  const offerCandidatesRef = child(clientRef, `offerCandidates`);
+  const answerCandidatesRef = child(clientRef, `answerCandidates`);
 
   pc.onicecandidate = async (event) => {
     if (event.candidate) {
-      await addDoc(offerCandidates, event.candidate.toJSON());
+      const offerCandidateRef = push(offerCandidatesRef);
+      await set(offerCandidateRef, event.candidate.toJSON());
     }
   };
 
@@ -61,41 +85,44 @@ async function createCall(pc, db, callCol, callDoc) {
     sdp: offerDescription.sdp,
   };
 
-  await setDoc(callDoc, { offer });
+  await update(clientRef, { offer });
 
-  onSnapshot(callDoc, snapshot => {
-    const data = snapshot.data();
-    if (!pc.currentRemoteDescription && data?.answer) {
-      const answerDescription = new RTCSessionDescription(data.answer);
+  onValue(answerRef, (snap) => {
+    console.log('answer changed', snap.exists(), snap.val());
+    if (!pc.currentRemoteDescription && snap.exists()) {
+      const answerDescription = new RTCSessionDescription(snap.val());
       pc.setRemoteDescription(answerDescription);
     }
   });
 
-  onSnapshot(answerCandidates, snapshot => {
-    snapshot.docChanges().forEach(change => {
-      if (change.type === 'added') {
-        const candidate = new RTCIceCandidate(change.doc.data());
-        pc.addIceCandidate(candidate);
-      }
-    });
+  onChildAdded(answerCandidatesRef, snap => {
+    console.log('answer candidate added', snap.exists(), snap.val());
+    pc.addIceCandidate(new RTCIceCandidate(snap.val()));
   });
 }
 
-async function joinCall(pc, db, callCol, callDoc) {
-  const offerCandidates = collection(callCol, callDoc.id, 'offerCandidates');
-  const answerCandidates = collection(callCol, callDoc.id, 'answerCandidates');
+async function joinCall(db, roomId, clientRef, offer, localStream) {
+  const pc = new RTCPeerConnection(SERVERS);
+
+  localStream.getTracks().forEach((track) => {
+    pc.addTrack(track, localStream);
+  });
+
+  pc.ontrack = event => {
+    addVideo(event.streams[0]);
+  };
+
+  const offerCandidatesRef = child(clientRef, `offerCandidates`);
+  const answerCandidatesRef = child(clientRef, `answerCandidates`);
 
   pc.onicecandidate = async (event) => {
     if (event.candidate) {
-      await addDoc(answerCandidates, event.candidate.toJSON());
+      const answerCandidateRef = push(answerCandidatesRef);
+      await set(answerCandidateRef, event.candidate.toJSON());
     }
   };
 
-  const callSnap = await getDoc(callDoc);
-  const callData = callSnap.data();
-
-  const offerDescription = callData.offer;
-  await pc.setRemoteDescription(new RTCSessionDescription(offerDescription));
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
   const answerDescription = await pc.createAnswer();
   await pc.setLocalDescription(answerDescription);
@@ -105,16 +132,11 @@ async function joinCall(pc, db, callCol, callDoc) {
     sdp: answerDescription.sdp,
   };
 
-  await updateDoc(callDoc, { answer });
+  await update(clientRef, { answer });
 
-  onSnapshot(offerCandidates, snapshot => {
-    snapshot.docChanges().forEach(change => {
-      console.log(change);
-      if (change.type === 'added') {
-        let data = change.doc.data();
-        pc.addIceCandidate(new RTCIceCandidate(data));
-      }
-    });
+  onChildAdded(offerCandidatesRef, (snap) => {
+    console.log('offer candidate added', snap.exists(), snap.val());
+    pc.addIceCandidate(new RTCIceCandidate(snap.val()));
   });
 }
 
@@ -128,28 +150,28 @@ async function addVideo(stream) {
   //   return video.dataset.remoteId;
   // });
 
-  // const remoteStream = new MediaStream();
-  // video.srcObject = remoteStream;
+  const video = Array.from(document.querySelectorAll('.remote-video'))[0];
 
-  // stream.getTracks().forEach(track => {
-  //   const remoteId = track.kind + track.label;
-  //   remoteStream.addTrack(track);
-  // });
+  const remoteStream = new MediaStream();
+  video.srcObject = remoteStream;
+
+  stream.getTracks().forEach(track => {
+    const remoteId = track.kind + track.label;
+    remoteStream.addTrack(track);
+  });
 }
 
-export default function (db) {
-  const callId = location.pathname.substr(1);
-
+export default function (db, roomId) {
   const confirmJoinRoomButton = document.querySelector('#confirm-join-room-btn');
   const roomPageConfirmJoinContainer = document.querySelector('#room-page-confirm-join');
 
-  confirmJoinRoomButton.innerHTML = `Join room <pre class="confirm-join-room-btn-room-id">${callId}</pre>`;
+  confirmJoinRoomButton.innerHTML = `Join room <pre class="confirm-join-room-btn-room-id">${roomId}</pre>`;
   confirmJoinRoomButton.onclick = async (event) => {
     roomPageConfirmJoinContainer.style.display = 'none';
     const roomPageJoiningContainer = document.querySelector('#room-page-joining');
     roomPageJoiningContainer.display = 'block';
 
-    await initRoom(db, callId);
+    await initRoom(db, roomId);
 
     roomPageJoiningContainer.display = 'none';
   };

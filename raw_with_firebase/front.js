@@ -1,13 +1,14 @@
-import { getFirestore, collection, doc, addDoc, getDoc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { ref, onValue, push, onDisconnect, set, serverTimestamp } from "firebase/database";
 
 export default function (db) {
   const frontPageContainer = document.querySelector('#front-page');
   frontPageContainer.style.display = 'flex';
 
   const createRoomButton = document.querySelector('#create-room-btn');
-  createRoomButton.onclick = event => {
-    const callCol = collection(db, 'calls');
-    const callDoc = doc(callCol);
-    location.pathname = '/' + callDoc.id;
+  createRoomButton.onclick = async (event) => {
+    const roomsRef = ref(db, 'rooms');
+    const room = push(roomsRef);
+    await set(room, { key: room.key });
+    location.pathname = '/' + room.key;
   };
 }
