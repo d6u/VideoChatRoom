@@ -19,10 +19,13 @@ export default class VideoStack {
   }
 
   recycleVideo(clientKey) {
-    const video = this.getVideo(clientKey);
+    const video = this.videoPairs_[clientKey];
     if (!video) {
       return;
     }
+    video.srcObject = null;
+    this.videos_.unshift(video);
+    delete this.videoPairs_[clientKey];
   }
 
   top_() {

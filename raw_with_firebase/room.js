@@ -56,6 +56,7 @@ async function initRoom(db, roomId) {
 
     onChildRemoved(clientsRef, async (snap) => {
       console.log(`client offlien: key = ${snap.key}`);
+      handupCall(videoStack, snap.key);
     });
 
     const peersRef = child(currentClientRef, `peers`);
@@ -66,13 +67,14 @@ async function initRoom(db, roomId) {
     });
 
     onValue(clientsRef, async (snap) => {
-      snap.forEach(async (clientSnap) => {
+      // cannot use async in forEach callback, otherwise it only execute the first one
+      snap.forEach((clientSnap) => {
         if (clientSnap.key === currentClientRef.key) {
           return;
         }
 
         console.log(`found exiting client (key = ${clientSnap.key}), joining...`);
-        await offerCall(localStream, videoStack, roomRef, currentClientRef, clientSnap.ref);
+        offerCall(localStream, videoStack, roomRef, currentClientRef, clientSnap.ref);
       });
     }, { onlyOnce: true });
   });
@@ -169,9 +171,14 @@ async function answerCall(localStream, videoStack, peerRef) {
   });
 }
 
+async function handupCall(videoStack, clientKey) {
+  videoStack.recycleVideo(clientKey);
+}
+
 async function addVideo(videoStack, clientKey, stream) {
   const video = videoStack.getVideoIfAvailable(clientKey);
   if (!video) {
+    alert("Cannot add more calls.");
     return;
   }
 
