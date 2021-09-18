@@ -1,8 +1,31 @@
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+.create-room-btn {
+  margin-top: 100px;
+}
+
+.confirm-join-room-btn {
+  margin-top: 100px;
+}
+
+.confirm-join-room-btn-room-id {
+  margin-top: 1rem;
+}
+
+.green-text {
+  color: #198754;
+  font-weight: bold;
+}
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 300px);
+  grid-auto-rows: 300px;
+}
+
+.video-grid video {
+  height: 100%;
+  width: 100%;
+}
+
+.local-video {
+  border: 5px solid #198754;
 }

@@ -1,42 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vite App</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css"
+    integrity="sha384-F3w7mX95PdgyTmZZMECAngseQB83DfGTowi0iMjiWaeVhAn4FJkqJByhZMI3AhiU" crossorigin="anonymous">
+  <script type="module" src="/main.js"></script>
 </head>
 
 <body>
-  <h2>Start your Webcam</h2>
-  <div class="videos">
-    <span>
-      <h3>Local</h3>
-      <video id="webcamVideo" autoplay playsinline></video>
-    </span>
-    <span>
-      <h3>Remote</h3>
-      <video id="remoteVideo" autoplay playsinline></video>
-    </span>
+  <div id="front-page" class="justify-content-center front-page" style="display: none;">
+    <button id="create-room-btn" type="button" class="btn btn-success create-room-btn">Create room</button>
   </div>
 
-  <button id="webcamButton">
-    Start webcam
-  </button>
+  <div id="room-page-confirm-join" class="justify-content-center" style="display: none;">
+    <button id="confirm-join-room-btn" type="button" class="btn btn-success confirm-join-room-btn"></button>
+  </div>
 
-  <h2>Create a new Call</h2>
-  <button id="callButton" disabled>
-    Call
-  </button>
+  <div id="room-page-joining" class="justify-content-center" style="display: none;">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
 
-  <h2>Join a Call</h2>
-  <input id="callInput" />
-  <button id="answerButton" disabled>Answer</button>
-
-  <button id="hangupButton">Hangup</button>
-
-  <script type="module" src="/main.js"></script>
+  <div id="room-page" class="room-page" style="display: none;">
+    <div>Video in <span class="green-text">green</span> border is local video.</div>
+    <div class="video-grid">
+      <div class="local-video">
+        <video id="webcamVideo" autoplay playsinline></video>
+      </div>
+      <div>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
