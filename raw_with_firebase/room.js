@@ -1,33 +1,52 @@
-import { ref, onValue, push, onDisconnect, set, child, get, onChildAdded, onChildRemoved, update, increment } from "firebase/database";
+import {
+  ref,
+  onValue,
+  push,
+  onDisconnect,
+  set,
+  child,
+  get,
+  onChildAdded,
+  onChildRemoved,
+  update,
+  increment,
+} from "firebase/database";
 import VideoStack from "./video_stack";
-import { SERVERS } from './config';
+import { SERVERS } from "./config";
 
 export default function (db, roomId) {
-  const confirmJoinRoomButton = document.querySelector('#confirm-join-room-btn');
-  const roomPageConfirmJoinContainer = document.querySelector('#room-page-confirm-join');
-  const roomPageJoiningContainer = document.querySelector('#room-page-joining');
+  const confirmJoinRoomButton = document.querySelector(
+    "#confirm-join-room-btn"
+  );
+  const roomPageConfirmJoinContainer = document.querySelector(
+    "#room-page-confirm-join"
+  );
+  const roomPageJoiningContainer = document.querySelector("#room-page-joining");
 
   confirmJoinRoomButton.innerHTML = `Join room <pre class="confirm-join-room-btn-room-id">${roomId}</pre>`;
 
   confirmJoinRoomButton.onclick = async (event) => {
-    roomPageConfirmJoinContainer.style.display = 'none';
-    roomPageJoiningContainer.style.display = 'flex';
+    roomPageConfirmJoinContainer.style.display = "none";
+    roomPageJoiningContainer.style.display = "flex";
 
     await initRoom(db, roomId);
 
-    roomPageJoiningContainer.style.display = 'none';
+    roomPageJoiningContainer.style.display = "none";
   };
 
-  roomPageConfirmJoinContainer.style.display = 'flex';
+  roomPageConfirmJoinContainer.style.display = "flex";
 }
 
 async function initRoom(db, roomId) {
   const videoStack = new VideoStack();
 
-  const webcamVideo = document.querySelector('#webcamVideo');
+  const webcamVideo = document.querySelector("#webcamVideo");
   webcamVideo.muted = true; // Avoid echo on local video
 
-  const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  const localStream = await navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: true,
+  });
   webcamVideo.srcObject = localStream;
 
   const roomRef = ref(db, `rooms/${roomId}`);
@@ -40,7 +59,7 @@ async function initRoom(db, roomId) {
 
   const clientsRef = child(roomRef, `clients`);
 
-  onValue(ref(db, '.info/connected'), async (snap) => {
+  onValue(ref(db, ".info/connected"), async (snap) => {
     if (!snap.val()) {
       return;
     }
@@ -66,36 +85,54 @@ async function initRoom(db, roomId) {
       answerCall(localStream, videoStack, snap.ref);
     });
 
-    onValue(clientsRef, async (snap) => {
-      // cannot use async in forEach callback, otherwise it only execute the first one
-      snap.forEach((clientSnap) => {
-        if (clientSnap.key === currentClientRef.key) {
-          return;
-        }
+    onValue(
+      clientsRef,
+      async (snap) => {
+        // cannot use async in forEach callback, otherwise it only execute the first one
+        snap.forEach((clientSnap) => {
+          if (clientSnap.key === currentClientRef.key) {
+            return;
+          }
 
-        console.log(`found exiting client (key = ${clientSnap.key}), joining...`);
-        offerCall(localStream, videoStack, roomRef, currentClientRef, clientSnap.ref);
-      });
-    }, { onlyOnce: true });
+          console.log(
+            `found exiting client (key = ${clientSnap.key}), joining...`
+          );
+          offerCall(
+            localStream,
+            videoStack,
+            roomRef,
+            currentClientRef,
+            clientSnap.ref
+          );
+        });
+      },
+      { onlyOnce: true }
+    );
   });
 
-  const debugInfoContainer = document.querySelector('#debug-info');
+  const debugInfoContainer = document.querySelector("#debug-info");
   onValue(roomRef, async (snap) => {
     debugInfoContainer.innerHTML = JSON.stringify(snap.val(), null, 4);
   });
 
-  const roomPageContainer = document.querySelector('#room-page');
-  roomPageContainer.style.display = 'block';
+  const roomPageContainer = document.querySelector("#room-page");
+  roomPageContainer.style.display = "block";
 }
 
-async function offerCall(localStream, videoStack, roomRef, currentClientRef, targetClientRef) {
+async function offerCall(
+  localStream,
+  videoStack,
+  roomRef,
+  currentClientRef,
+  targetClientRef
+) {
   const pc = new RTCPeerConnection(SERVERS);
 
   localStream.getTracks().forEach((track) => {
     pc.addTrack(track, localStream);
   });
 
-  pc.ontrack = event => {
+  pc.ontrack = (event) => {
     addVideo(videoStack, targetClientRef.key, event.streams[0]);
   };
 
@@ -118,18 +155,18 @@ async function offerCall(localStream, videoStack, roomRef, currentClientRef, tar
     offer: {
       type: offerDescription.type,
       sdp: offerDescription.sdp,
-    }
+    },
   });
 
   onValue(answerRef, async (snap) => {
-    console.log('answer changed', snap.val());
+    console.log("answer changed", snap.val());
     if (!pc.currentRemoteDescription && snap.exists()) {
       pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
     }
   });
 
-  onChildAdded(answerCandidatesRef, snap => {
-    console.log('answer candidate added', snap.val());
+  onChildAdded(answerCandidatesRef, (snap) => {
+    console.log("answer candidate added", snap.val());
     pc.addIceCandidate(new RTCIceCandidate(snap.val()));
   });
 }
@@ -141,7 +178,7 @@ async function answerCall(localStream, videoStack, peerRef) {
     pc.addTrack(track, localStream);
   });
 
-  pc.ontrack = event => {
+  pc.ontrack = (event) => {
     addVideo(videoStack, peerRef.key, event.streams[0]);
   };
 
@@ -167,11 +204,11 @@ async function answerCall(localStream, videoStack, peerRef) {
     answer: {
       type: answerDescription.type,
       sdp: answerDescription.sdp,
-    }
+    },
   });
 
   onChildAdded(offerCandidatesRef, async (snap) => {
-    console.log('offer candidate added', snap.val());
+    console.log("offer candidate added", snap.val());
     pc.addIceCandidate(new RTCIceCandidate(snap.val()));
   });
 }
@@ -190,7 +227,7 @@ async function addVideo(videoStack, clientKey, stream) {
   const remoteStream = new MediaStream();
   video.srcObject = remoteStream;
 
-  stream.getTracks().forEach(track => {
+  stream.getTracks().forEach((track) => {
     remoteStream.addTrack(track);
   });
 }

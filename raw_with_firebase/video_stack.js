@@ -3,7 +3,7 @@ export default class VideoStack {
   videoPairs_ = {};
 
   constructor() {
-    this.videos_ = Array.from(document.querySelectorAll('.remote-video'));
+    this.videos_ = Array.from(document.querySelectorAll(".remote-video"));
   }
 
   getVideoIfAvailable(clientKey) {
