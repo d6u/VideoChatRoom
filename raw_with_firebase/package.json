@@ -8,7 +8,7 @@
   },
   "devDependencies": {
     "firebase": "^9.0.2",
-    "firebase-tools": "^9.18.0",
+    "firebase-tools": "^9.20.0",
     "vite": "^2.5.4"
   }
 }
