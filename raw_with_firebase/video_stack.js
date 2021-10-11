@@ -1,4 +1,21 @@
-export default class VideoStack {
+export async function addVideo(videoStack, clientKey, track) {
+  const video = videoStack.getVideoIfAvailable(clientKey);
+
+  if (!video) {
+    alert("Cannot add more calls.");
+    return;
+  }
+
+  if (video.srcObject == null) {
+    console.log("No srcObject, creating new MediaStream.");
+
+    video.srcObject = new MediaStream();
+  }
+
+  video.srcObject.addTrack(track);
+}
+
+export class VideoStack {
   videos_ = [];
   videoPairs_ = {};
 

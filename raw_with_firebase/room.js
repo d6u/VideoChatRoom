@@ -11,8 +11,9 @@ import {
   update,
   increment,
 } from "firebase/database";
-import VideoStack from "./video_stack";
-import { SERVERS } from "./config";
+import { VideoStack } from "./video_stack";
+import createOffer from "./create_offer";
+import createAnswer from "./create_answer";
 
 export default function (db, roomId) {
   const confirmJoinRoomButton = document.querySelector(
@@ -38,6 +39,8 @@ export default function (db, roomId) {
 }
 
 async function initRoom(db, roomId) {
+  console.log("Initialize room.");
+
   const videoStack = new VideoStack();
 
   const webcamVideo = document.querySelector("#webcamVideo");
@@ -75,6 +78,7 @@ async function initRoom(db, roomId) {
 
     onChildRemoved(clientsRef, async (snap) => {
       console.log(`client offlien: key = ${snap.key}`);
+
       handupCall(videoStack, snap.key);
     });
 
@@ -82,7 +86,7 @@ async function initRoom(db, roomId) {
 
     onChildAdded(peersRef, async (snap) => {
       console.log(`new peer added: key = ${snap.key}`);
-      answerCall(localStream, videoStack, snap.ref);
+      createAnswer(localStream, videoStack, snap.ref);
     });
 
     onValue(
@@ -97,7 +101,7 @@ async function initRoom(db, roomId) {
           console.log(
             `found exiting client (key = ${clientSnap.key}), joining...`
           );
-          offerCall(
+          createOffer(
             localStream,
             videoStack,
             roomRef,
@@ -119,115 +123,6 @@ async function initRoom(db, roomId) {
   roomPageContainer.style.display = "block";
 }
 
-async function offerCall(
-  localStream,
-  videoStack,
-  roomRef,
-  currentClientRef,
-  targetClientRef
-) {
-  const pc = new RTCPeerConnection(SERVERS);
-
-  localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
-  });
-
-  pc.ontrack = (event) => {
-    addVideo(videoStack, targetClientRef.key, event.streams[0]);
-  };
-
-  const peerRef = child(targetClientRef, `peers/${currentClientRef.key}`);
-  const offerCandidatesRef = child(peerRef, `offerCandidates`);
-  const answerRef = child(peerRef, `answer`);
-  const answerCandidatesRef = child(peerRef, `answerCandidates`);
-
-  pc.onicecandidate = async (event) => {
-    if (event.candidate) {
-      const offerCandidateRef = push(offerCandidatesRef);
-      await set(offerCandidateRef, event.candidate.toJSON());
-    }
-  };
-
-  const offerDescription = await pc.createOffer();
-  await pc.setLocalDescription(offerDescription);
-
-  await update(peerRef, {
-    offer: {
-      type: offerDescription.type,
-      sdp: offerDescription.sdp,
-    },
-  });
-
-  onValue(answerRef, async (snap) => {
-    console.log("answer changed", snap.val());
-    if (!pc.currentRemoteDescription && snap.exists()) {
-      pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
-    }
-  });
-
-  onChildAdded(answerCandidatesRef, (snap) => {
-    console.log("answer candidate added", snap.val());
-    pc.addIceCandidate(new RTCIceCandidate(snap.val()));
-  });
-}
-
-async function answerCall(localStream, videoStack, peerRef) {
-  const pc = new RTCPeerConnection(SERVERS);
-
-  localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
-  });
-
-  pc.ontrack = (event) => {
-    addVideo(videoStack, peerRef.key, event.streams[0]);
-  };
-
-  const offerRef = child(peerRef, `offer`);
-  const offerCandidatesRef = child(peerRef, `offerCandidates`);
-  const answerCandidatesRef = child(peerRef, `answerCandidates`);
-
-  pc.onicecandidate = async (event) => {
-    if (event.candidate) {
-      const answerCandidateRef = push(answerCandidatesRef);
-      await set(answerCandidateRef, event.candidate.toJSON());
-    }
-  };
-
-  const offerSnap = await get(offerRef);
-
-  await pc.setRemoteDescription(new RTCSessionDescription(offerSnap.val()));
-
-  const answerDescription = await pc.createAnswer();
-  await pc.setLocalDescription(answerDescription);
-
-  await update(peerRef, {
-    answer: {
-      type: answerDescription.type,
-      sdp: answerDescription.sdp,
-    },
-  });
-
-  onChildAdded(offerCandidatesRef, async (snap) => {
-    console.log("offer candidate added", snap.val());
-    pc.addIceCandidate(new RTCIceCandidate(snap.val()));
-  });
-}
-
 async function handupCall(videoStack, clientKey) {
   videoStack.recycleVideo(clientKey);
-}
-
-async function addVideo(videoStack, clientKey, stream) {
-  const video = videoStack.getVideoIfAvailable(clientKey);
-  if (!video) {
-    alert("Cannot add more calls.");
-    return;
-  }
-
-  const remoteStream = new MediaStream();
-  video.srcObject = remoteStream;
-
-  stream.getTracks().forEach((track) => {
-    remoteStream.addTrack(track);
-  });
 }

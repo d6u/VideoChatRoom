@@ -1,15 +1,8 @@
 import "./style.css";
 import { initializeApp } from "firebase/app";
-import {
-  getDatabase,
-  ref,
-  onValue,
-  push,
-  onDisconnect,
-  set,
-} from "firebase/database";
-import room from "./room";
+import { getDatabase } from "firebase/database";
 import front from "./front";
+import room from "./room";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAFBaYPFD-OCoUIgjaBPcG-I2tYOMf34RQ",
