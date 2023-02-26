@@ -1,0 +1,15 @@
+.App {
+  text-align: center;
+}
+
+.Room_videos-container {
+  display: flex;
+}
+
+.Room_single-video-container {
+  padding: 10px;
+}
+
+.Room_single-video-container-self {
+  background-color: green;
+}
