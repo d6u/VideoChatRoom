@@ -119,3 +119,9 @@ dist
 
 # Custom
 *.pem
+
+# Ignore AWS artifacts
+*.zip
+
+# MacOS
+.DS_Store
