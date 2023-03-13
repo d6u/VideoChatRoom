@@ -1,5 +1,5 @@
 {
-  "name": "chatroom-create-room",
+  "name": "websocket-connect-client",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",

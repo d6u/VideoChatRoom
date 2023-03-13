@@ -9,6 +9,10 @@ terraform {
 
 provider "archive" {}
 
+provider "aws" {
+  region = "us-west-1"
+}
+
 data "archive_file" "lambdas-http-CreateRoom" {
   type        = "zip"
   excludes    = []
@@ -49,10 +53,6 @@ data "archive_file" "lambdas-websocket-ConnectClient" {
   excludes    = []
   source_dir  = "lambdas/websocket/ConnectClient"
   output_path = "lambdas-websocket-ConnectClient.zip"
-}
-
-provider "aws" {
-  region = "us-west-1"
 }
 
 resource "aws_s3_bucket" "gameroom-deployment" {
@@ -107,3 +107,22 @@ resource "aws_s3_object" "lambdas-websocket-ConnectClient" {
   source = data.archive_file.lambdas-websocket-ConnectClient.output_path
 }
 
+resource "aws_s3_object" "cloudformation_template" {
+  bucket = aws_s3_bucket.gameroom-deployment.id
+  key    = "cloudformation-template.yaml"
+  source = "cloudformation-template.yaml"
+}
+
+resource "aws_cloudformation_stack" "gameroom_stack" {
+  name         = "GameroomStack"
+  capabilities = ["CAPABILITY_NAMED_IAM"]
+  template_url = "https://${aws_s3_object.cloudformation_template.bucket}.s3.us-west-1.amazonaws.com/${aws_s3_object.cloudformation_template.key}"
+}
+
+output "http_endpoint_url" {
+  value = aws_cloudformation_stack.gameroom_stack.outputs["HttpEndpointUrl"]
+}
+
+output "websocket_endpoint_url" {
+  value = aws_cloudformation_stack.gameroom_stack.outputs["WebSocketEndpointUrl"]
+}

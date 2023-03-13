@@ -144,10 +144,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
-        ZipFile: |
-          exports.handler = async function (event, context) {
-            return {statusCode: 200, body: "OK"};
-          }
+        S3Bucket: gameroom-deployment
+        S3Key: lambdas-websocket-connect.zip
       TracingConfig:
         Mode: Active
   LambdaPermissionConnect:
@@ -195,10 +193,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
-        ZipFile: |
-          exports.handler = async function (event, context) {
-            return {statusCode: 200, body: "Hello, WebSocket!"};
-          }
+        S3Bucket: gameroom-deployment
+        S3Key: lambdas-websocket-default.zip
       TracingConfig:
         Mode: Active
   LambdaPermissionDefault:
@@ -298,3 +294,11 @@ Resources:
       FunctionName: !Ref LambdaFunctionJoinRoom
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/JoinRoom
+Outputs:
+  HttpEndpointUrl:
+    Value: !GetAtt ApiGatewayApiHttp.ApiEndpoint
+  WebSocketEndpointUrl:
+    Value: !Join
+      - /
+      - - !GetAtt ApiGatewayApiWebSocket.ApiEndpoint
+        - staging

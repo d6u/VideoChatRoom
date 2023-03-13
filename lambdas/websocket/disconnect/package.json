@@ -1,5 +1,5 @@
 {
-  "name": "websocket-default",
+  "name": "websocket-disconnect",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
