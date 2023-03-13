@@ -72,12 +72,17 @@ resource "aws_cloudformation_stack" "gameroom_stack" {
   template_body = file("cloudformation-template.yaml")
 }
 
+locals {
+  http_endpoint_url      = aws_cloudformation_stack.gameroom_stack.outputs["HttpEndpointUrl"]
+  websocket_endpoint_url = aws_cloudformation_stack.gameroom_stack.outputs["WebSocketEndpointUrl"]
+}
+
 output "http_endpoint_url" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["HttpEndpointUrl"]
+  value = local.http_endpoint_url
 }
 
 output "websocket_endpoint_url" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["WebSocketEndpointUrl"]
+  value = local.websocket_endpoint_url
 }
 
 output "lambda_function_name_create_room" {
@@ -98,4 +103,12 @@ output "lambda_function_name_disconnect" {
 
 output "lambda_function_name_join_room" {
   value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameJoinRoom"]
+}
+
+resource "local_file" "api_endpoints" {
+  content = jsonencode({
+    http_endpoint_url      = local.http_endpoint_url
+    websocket_endpoint_url = local.websocket_endpoint_url
+  })
+  filename = "react-webrtc/src/api_endpoints.json"
 }
