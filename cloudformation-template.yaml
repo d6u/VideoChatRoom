@@ -1,6 +1,19 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
   Multiline string placeholder.
+Parameters:
+  LambdaSourceS3KeyCreateRoom:
+    Type: String
+  LambdaSourceS3KeyConnect:
+    Type: String
+  LambdaSourceS3KeyDisconnect:
+    Type: String
+  LambdaSourceS3KeyDefault:
+    Type: String
+  LambdaSourceS3KeyJoinRoom:
+    Type: String
+  LambdaSourceS3KeyConnectClient:
+    Type: String
 Resources:
   # --- Lambda IAM ---
   IamRoleLambdaShared:
@@ -85,7 +98,7 @@ Resources:
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: lambdas-http-CreateRoom.zip
+        S3Key: !Ref LambdaSourceS3KeyCreateRoom
       Environment:
         Variables:
           ROOMS_TABLE_NAME: chatroom-db
@@ -145,7 +158,7 @@ Resources:
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: lambdas-websocket-connect.zip
+        S3Key: !Ref LambdaSourceS3KeyConnect
       TracingConfig:
         Mode: Active
   LambdaPermissionConnect:
@@ -194,7 +207,7 @@ Resources:
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: lambdas-websocket-default.zip
+        S3Key: !Ref LambdaSourceS3KeyDefault
       TracingConfig:
         Mode: Active
   LambdaPermissionDefault:
@@ -230,10 +243,8 @@ Resources:
       Handler: index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
-        ZipFile: |
-          exports.handler = async function (event, context) {
-            return {statusCode: 200};
-          }
+        S3Bucket: gameroom-deployment
+        S3Key: !Ref LambdaSourceS3KeyDisconnect
       TracingConfig:
         Mode: Active
   LambdaPermissionDisconnect:
@@ -281,10 +292,12 @@ Resources:
       Handler: index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
-        ZipFile: |
-          exports.handler = async function (event, context) {
-            return {statusCode: 200, body: "Hello, JoinRoom!"};
-          }
+        S3Bucket: gameroom-deployment
+        S3Key: !Ref LambdaSourceS3KeyJoinRoom
+      Environment:
+        Variables:
+          ROOMS_TABLE_NAME: chatroom-db
+          CLIENTS_TABLE_NAME: gameroom_clients
       TracingConfig:
         Mode: Active
   LambdaPermissionJoinRoom:
@@ -294,6 +307,8 @@ Resources:
       FunctionName: !Ref LambdaFunctionJoinRoom
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/JoinRoom
+
+# --- Outputs ---
 Outputs:
   HttpEndpointUrl:
     Value: !GetAtt ApiGatewayApiHttp.ApiEndpoint
@@ -302,3 +317,13 @@ Outputs:
       - /
       - - !GetAtt ApiGatewayApiWebSocket.ApiEndpoint
         - staging
+  LambdaFunctionNameCreateRoom:
+    Value: !Ref LambdaFunctionCreateRoom
+  LambdaFunctionNameConnect:
+    Value: !Ref LambdaFunctionConnect
+  LambdaFunctionNameDefault:
+    Value: !Ref LambdaFunctionDefault
+  LambdaFunctionNameDisconnect:
+    Value: !Ref LambdaFunctionDisconnect
+  LambdaFunctionNameJoinRoom:
+    Value: !Ref LambdaFunctionJoinRoom

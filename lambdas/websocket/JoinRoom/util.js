@@ -11,7 +11,7 @@ export async function getRoom(roomId) {
   try {
     const response = await dynamoDbClient.send(
       new GetItemCommand({
-        TableName: process.env.TABLE_NAME,
+        TableName: process.env.ROOMS_TABLE_NAME,
         Key: {
           roomId: { S: roomId },
         },
@@ -40,7 +40,7 @@ export async function postToClients(endpoint, clientIds, roomId, data) {
         try {
           await dynamoDbClient.send(
             new UpdateItemCommand({
-              TableName: process.env.TABLE_NAME,
+              TableName: process.env.ROOMS_TABLE_NAME,
               Key: {
                 roomId: { S: roomId },
               },
@@ -80,7 +80,7 @@ export async function updateClient(connectionId, roomId) {
 export async function updateRoom(roomId, connectionId) {
   await dynamoDbClient.send(
     new UpdateItemCommand({
-      TableName: process.env.TABLE_NAME,
+      TableName: process.env.ROOMS_TABLE_NAME,
       Key: {
         roomId: { S: roomId },
       },
