@@ -30,6 +30,7 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
                 Resource:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/chatroom-db
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameroom_clients
@@ -246,6 +247,10 @@ Resources:
       Code:
         S3Bucket: gameroom-deployment
         S3Key: !Ref LambdaSourceS3KeyDisconnect
+      Environment:
+        Variables:
+          ROOMS_TABLE_NAME: chatroom-db
+          CLIENTS_TABLE_NAME: gameroom_clients
       TracingConfig:
         Mode: Active
   LambdaPermissionDisconnect:
