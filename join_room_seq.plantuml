@@ -1,0 +1,52 @@
+@startuml join_room
+
+participant user1
+participant user2
+participant user3
+participant api_gateway
+participant ws_lambda
+participant db
+
+user1 -> api_gateway : $connect
+user1 -> ws_lambda : {action: join_room, roomId}
+ws_lambda -> db : look up roomId
+return clients
+ws_lambda -> api_gateway : broadcast
+ws_lambda -> db : insert connectionId
+ws_lambda -> db : insert connectionId -> roomId map
+
+...later...
+
+user2 -> api_gateway : $connect
+user2 -> ws_lambda : join_room(roomId)
+ws_lambda -> db : look up roomId
+return clients
+ws_lambda -> api_gateway : broadcast
+api_gateway -> user1 : {type: client_joined, clientId: connectionId}
+ws_lambda -> db : insert connectionId
+ws_lambda -> db : insert connectionId -> roomId map
+
+...later...
+
+user3 -> api_gateway : $connect
+user3 -> ws_lambda : join_room(roomId)
+ws_lambda -> db : look up roomId
+return clients
+ws_lambda -> api_gateway : broadcast
+api_gateway -> user1 : new_client(connectionId)
+api_gateway -> user2 : new_client(connectionId)
+ws_lambda -> db : insert connectionId
+ws_lambda -> db : insert connectionId -> roomId map
+
+...later...
+
+user1 -> api_gateway : $disconnect
+api_gateway -> ws_lambda
+ws_lambda -> db : look up roomId by connectionId
+return roomId
+ws_lambda -> db : remove connectionId from roomId
+ws_lambda -> api_gateway : broadcast
+api_gateway -> user2 : {type: client_left, clientId: connectionId}
+api_gateway -> user3 : {type: client_left, clientId: connectionId}
+
+@enduml

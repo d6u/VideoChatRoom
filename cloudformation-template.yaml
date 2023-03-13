@@ -1,0 +1,300 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  Multiline string placeholder.
+Resources:
+  # --- Lambda IAM ---
+  IamRoleLambdaShared:
+    Type: AWS::IAM::Role
+    Properties:
+      Policies:
+        - PolicyName: LambdaReadWriteDynamoDb
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/chatroom-db
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameroom_clients
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*/index/*
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  # --- CloudWatch ---
+  # LogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: GameroomLogGroup
+  #     RetentionInDays: 30
+
+  # --- HTTP APIs ---
+  ApiGatewayApiHttp:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}ApiGatewayApiHttp
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowMethods:
+          - "*"
+        AllowOrigins:
+          - "*"
+
+  # --- HTTP APIs stage ---
+  ApiGatewayStageHttpDefault:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      StageName: $default
+      AutoDeploy: true
+
+  # --- HTTP APIs route: POST /rooms ---
+  ApiGatewayRouteCreateRoom:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      RouteKey: "POST /rooms"
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationCreateRoom
+  ApiGatewayIntegrationCreateRoom:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      IntegrationMethod: GET
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LambdaFunctionCreateRoom.Arn
+      PayloadFormatVersion: 2.0
+  LambdaFunctionCreateRoom:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        S3Bucket: gameroom-deployment
+        S3Key: lambdas-http-CreateRoom.zip
+      Environment:
+        Variables:
+          ROOMS_TABLE_NAME: chatroom-db
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionCreateRoom:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionCreateRoom
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiHttp.ApiId}/*/*/rooms
+
+  # --- WebSocket APIs ---
+  ApiGatewayApiWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}ApiGatewayApiWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  # --- WebSocket APIs stage ---
+  ApiGatewayStageWebSocketStaging:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      StageName: staging
+      AutoDeploy: true
+      DefaultRouteSettings:
+        DataTraceEnabled: true
+        DetailedMetricsEnabled: true
+        LoggingLevel: INFO
+
+  # --- WebSocket APIs route: $connect ---
+  ApiGatewayRouteConnect:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteKey: $connect
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationConnect
+  ApiGatewayIntegrationConnect:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionConnect.Arn}/invocations
+  LambdaFunctionConnect:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async function (event, context) {
+            return {statusCode: 200, body: "OK"};
+          }
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionConnect:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionConnect
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/$connect
+
+  # --- WebSocket APIs route: $default ---
+  ApiGatewayRouteDefault:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteKey: $default
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationDefault
+  ApiGatewayIntegrationDefault:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionDefault.Arn}/invocations
+  ApiGatewayIntegrationResponseDefault:
+    Type: AWS::ApiGatewayV2::IntegrationResponse
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationId: !Ref ApiGatewayIntegrationDefault
+      IntegrationResponseKey: $default
+  ApiGatewayRouteResponseDefault:
+    Type: AWS::ApiGatewayV2::RouteResponse
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteId: !Ref ApiGatewayRouteDefault
+      RouteResponseKey: $default
+  LambdaFunctionDefault:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async function (event, context) {
+            return {statusCode: 200, body: "Hello, WebSocket!"};
+          }
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionDefault:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionDefault
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/$default
+
+  # --- WebSocket APIs route: $disconnect ---
+  ApiGatewayRouteDisconnect:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteKey: $disconnect
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationDisconnect
+  ApiGatewayIntegrationDisconnect:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionDisconnect.Arn}/invocations
+  LambdaFunctionDisconnect:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async function (event, context) {
+            return {statusCode: 200};
+          }
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionDisconnect:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionDisconnect
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/$disconnect
+
+  # --- WebSocket APIs route: JoinRoom ---
+  ApiGatewayRouteJoinRoom:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteKey: JoinRoom
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationJoinRoom
+  ApiGatewayIntegrationJoinRoom:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionJoinRoom.Arn}/invocations
+  ApiGatewayIntegrationResponseJoinRoom:
+    Type: AWS::ApiGatewayV2::IntegrationResponse
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationId: !Ref ApiGatewayIntegrationJoinRoom
+      IntegrationResponseKey: $default
+  ApiGatewayRouteResponseJoinRoom:
+    Type: AWS::ApiGatewayV2::RouteResponse
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteId: !Ref ApiGatewayRouteJoinRoom
+      RouteResponseKey: $default
+  LambdaFunctionJoinRoom:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async function (event, context) {
+            return {statusCode: 200, body: "Hello, JoinRoom!"};
+          }
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionJoinRoom:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionJoinRoom
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/JoinRoom
