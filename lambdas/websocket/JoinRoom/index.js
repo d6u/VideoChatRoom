@@ -1,101 +1,127 @@
-import { postToClients, getRoom, updateClient, updateRoom } from "./util.js";
+import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
+import { addClientIdToRoom, postToClients, updateClient } from "./util.js";
 
 const ERROR_TYPES = {
-  GET_ROOM_ERROR: "GET_ROOM_ERROR",
-  ROOM_NOT_FOUND_ERROR: "ROOM_NOT_FOUND_ERROR",
-  POST_TO_CLIENTS_ERROR: "POST_TO_CLIENTS_ERROR",
-  UPDATE_ROOM_ERROR: "UPDATE_ROOM_ERROR",
-  UPDATE_CLIENT_ERROR: "UPDATE_CLIENT_ERROR",
+  RoomNotFoundError: "RoomNotFoundError",
+  AddClientIdToRoomError: "AddClientIdToRoomError",
+  GetRoomError: "GetRoomError",
+  PostToClientsError: "PostToClientsError",
+  UpdateClientError: "UpdateClientError",
 };
 
-export const handler = async (event, context) => {
-  console.log("Receiving event", event);
-
+function parseEvent(event) {
   const {
     requestContext: { connectionId },
     body,
   } = event;
   const { roomId } = JSON.parse(body);
-  const [response, err] = await getRoom(roomId);
+  return {
+    connectionId,
+    roomId,
+  };
+}
 
-  if (err != null) {
-    console.error(`Getting room "${roomId}" failed.`, err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.GET_ROOM_ERROR,
-        error: err,
-      }),
-    };
-  }
+export async function handler(event, context) {
+  console.log("Receiving event", event);
 
-  if (response == null || response.Item == null) {
-    console.error(`Could not find room "${roomId}".`);
-    return {
-      statusCode: 404,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.ROOM_NOT_FOUND_ERROR,
-      }),
-    };
-  }
+  const endpoint = `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
+  const { connectionId, roomId } = parseEvent(event);
 
-  console.log(`Getting room "${roomId}" succeeded.`, response);
+  // ===
 
-  if (response.Item.clients != null) {
-    try {
-      await postToClients(
-        `https://${event.requestContext.domainName}/${event.requestContext.stage}`,
-        response.Item.clients.SS,
-        roomId,
-        JSON.stringify({ type: "ClientJoin", clientId: connectionId })
+  console.log(`Adding client ID ${connectionId} to room "${roomId}".`);
+  let addClientIdToRoomResponse = null;
+  try {
+    addClientIdToRoomResponse = await addClientIdToRoom(roomId, connectionId);
+  } catch (error) {
+    if (error.name === "ConditionalCheckFailedException") {
+      console.error(`Room "${roomId}" not found.`);
+      return {
+        statusCode: 404,
+        body: JONS.stringify({
+          errorType: ERROR_TYPES.RoomNotFoundError,
+        }),
+      };
+    } else {
+      console.error(
+        `Adding client ID ${connectionId} to room "${roomId}" failed.`,
+        error
       );
-    } catch (err) {
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error_type: ERROR_TYPES.POST_TO_CLIENTS_ERROR,
-          error: err,
+          errorType: ERROR_TYPES.AddClientIdToRoomError,
+          error,
         }),
       };
     }
   }
+  console.log(
+    `Adding client ID ${connectionId} to room "${roomId}" succeeded.`
+  );
 
+  // ===
+
+  const clients = addClientIdToRoomResponse.Attributes.clients.SS.filter(
+    (clientId) => clientId != connectionId
+  );
+  const apiGatewayManagementApi = new ApiGatewayManagementApi({ endpoint });
   try {
-    await updateRoom(roomId, connectionId);
-  } catch (err) {
-    console.error(`Updating room "${roomId}" failed.`, err);
+    await apiGatewayManagementApi.postToConnection({
+      ConnectionId: connectionId,
+      Data: JSON.stringify({ type: "ClientList", clients }),
+    });
+  } catch (error) {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error_type: ERROR_TYPES.UPDATE_ROOM_ERROR,
-        error: err,
+        error_type: ERROR_TYPES.PostToClientsError,
+        error,
       }),
     };
   }
 
-  console.log(`Updating room "${roomId}" succeeded.`);
+  // ===
 
   try {
     await updateClient(connectionId, roomId);
-  } catch (err) {
+  } catch (error) {
     console.error(
       `Updating clientId "${connectionId}" to "${roomId}" map failed.`,
-      err
+      error
     );
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error_type: ERROR_TYPES.UPDATE_CLIENT_ERROR,
+        error_type: ERROR_TYPES.UpdateClientError,
+        error,
+      }),
+    };
+  }
+  console.log(
+    `Updating clientId "${connectionId}" to "${roomId}" map succeeded.`
+  );
+
+  // ===
+
+  try {
+    await postToClients(
+      endpoint,
+      clients,
+      roomId,
+      JSON.stringify({ type: "ClientJoin", clientId: connectionId })
+    );
+  } catch (err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error_type: ERROR_TYPES.PostToClientsError,
         error: err,
       }),
     };
   }
 
-  console.log(
-    `Updating clientId "${connectionId}" to "${roomId}" map succeeded.`
-  );
-
   return {
     statusCode: 200,
   };
-};
+}

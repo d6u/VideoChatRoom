@@ -20,7 +20,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       Policies:
-        - PolicyName: LambdaReadWriteDynamoDb
+        - PolicyName: !Sub ${AWS::StackName}LambdaReadWriteDynamoDb
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -35,7 +35,7 @@ Resources:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/chatroom-db
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameroom_clients
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*/index/*
-        - PolicyName: LambdaPostToWebSocketConnection
+        - PolicyName: !Sub ${AWS::StackName}LambdaPostToWebSocketConnection
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -53,14 +53,30 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
-
-  # --- CloudWatch ---
-  # LogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: GameroomLogGroup
-  #     RetentionInDays: 30
-
+  IamPolicyLambdaLogging:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${AWS::StackName}LambdaLogging
+      Roles:
+        - !Ref IamRoleLambdaShared
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+            Resource:
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionCreateRoom}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnect}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDefault}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDisconnect}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionJoinRoom}:*
   # --- HTTP APIs ---
   ApiGatewayApiHttp:
     Type: AWS::ApiGatewayV2::Api

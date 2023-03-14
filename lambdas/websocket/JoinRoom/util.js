@@ -1,27 +1,26 @@
-import {
-  DynamoDBClient,
-  GetItemCommand,
-  UpdateItemCommand,
-} from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
 
 const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 
-export async function getRoom(roomId) {
-  try {
-    const response = await dynamoDbClient.send(
-      new GetItemCommand({
-        TableName: process.env.ROOMS_TABLE_NAME,
-        Key: {
-          roomId: { S: roomId },
-        },
-      })
-    );
-
-    return [response, null];
-  } catch (err) {
-    return [null, err];
-  }
+export async function addClientIdToRoom(roomId, connectionId) {
+  return await dynamoDbClient.send(
+    new UpdateItemCommand({
+      TableName: process.env.ROOMS_TABLE_NAME,
+      Key: {
+        roomId: { S: roomId },
+      },
+      // By default, UpdateItem will perform create the record if it doesn't
+      // ready exist. By adding the ConditionExpression, we prevent creating new
+      // record if roomId cannot be found.
+      ConditionExpression: "attribute_exists(roomId)",
+      UpdateExpression: "ADD clients :vals",
+      ExpressionAttributeValues: {
+        ":vals": { SS: [connectionId] },
+      },
+      ReturnValues: "ALL_NEW",
+    })
+  );
 }
 
 export async function postToClients(endpoint, clientIds, roomId, data) {
@@ -72,21 +71,6 @@ export async function updateClient(connectionId, roomId) {
       UpdateExpression: "SET roomId = :val",
       ExpressionAttributeValues: {
         ":val": { S: roomId },
-      },
-    })
-  );
-}
-
-export async function updateRoom(roomId, connectionId) {
-  await dynamoDbClient.send(
-    new UpdateItemCommand({
-      TableName: process.env.ROOMS_TABLE_NAME,
-      Key: {
-        roomId: { S: roomId },
-      },
-      UpdateExpression: "ADD clients :vals",
-      ExpressionAttributeValues: {
-        ":vals": { SS: [connectionId] },
       },
     })
   );
