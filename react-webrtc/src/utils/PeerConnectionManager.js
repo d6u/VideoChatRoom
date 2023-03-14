@@ -9,43 +9,14 @@ const WEBRTC_CONFIG = {
 
 export default class PeerConnectionManager {
   isDestroyed = false;
-  onRemoteTrackAvailableListeners = new Set();
-  onIceCandidateListeners = new Set();
-  onPeerConnectionEndListeners = new Set();
+  callbakcs = {};
 
-  constructor(targetClientKey) {
+  constructor(targetClientKey, callbakcs) {
     this.targetClientKey = targetClientKey;
-  }
-
-  addOnRemoteTrackAvailableListener(listener) {
-    this.onRemoteTrackAvailableListeners.add(listener);
-  }
-
-  removeOnRemoteTrackAvailableListener(listener) {
-    this.onRemoteTrackAvailableListeners.delete(listener);
-  }
-
-  addOnIceCandidateListener(listener) {
-    this.onIceCandidateListeners.add(listener);
-  }
-
-  removeOnIceCandidateListener(listener) {
-    this.onIceCandidateListeners.delete(listener);
-  }
-
-  addOnPeerConnectionEndListener(listener) {
-    this.onPeerConnectionEndListeners.add(listener);
-  }
-
-  removeOnPeerConnectionEndListener(listener) {
-    this.onPeerConnectionEndListeners.delete(listener);
+    this.callbakcs = callbakcs;
   }
 
   createConnection() {
-    console.debug(
-      `Target client key: ${this.targetClientKey} | Creating connection.`
-    );
-
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
     this.pc.onsignalingstatechange = (event) => {
@@ -65,11 +36,15 @@ export default class PeerConnectionManager {
         `Target client key: ${this.targetClientKey} | onconnectionstatechange ${this.pc.connectionState}`
       );
       switch (this.pc.connectionState) {
-        case "failed":
+        case "failed": {
           for (const listener of this.onPeerConnectionEndListeners) {
             listener();
           }
           break;
+        }
+        default: {
+          break;
+        }
       }
     };
 
@@ -98,9 +73,7 @@ export default class PeerConnectionManager {
       console.debug(
         `Target client key: ${this.targetClientKey} | ontrack: ${event.track.kind}, ${event.track.id}`
       );
-      for (const listener of this.onRemoteTrackAvailableListeners) {
-        listener(event.track);
-      }
+      this.callbakcs["onTrack"](event.track);
     };
 
     this.pc.onicecandidate = (event) => {
@@ -113,9 +86,10 @@ export default class PeerConnectionManager {
         );
         return;
       }
-      for (const listener of this.onIceCandidateListeners) {
-        listener(event.candidate);
-      }
+      console.debug(
+        `Target client key: ${this.targetClientKey} | onicecandidate.`
+      );
+      this.callbakcs["onIceCandidate"](event.candidate);
     };
   }
 

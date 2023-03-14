@@ -62,9 +62,9 @@ Client2 -> APIGateway2 : JoinRoom
   APIGateway2 -> Lambda2 : {action: "JoinRoom", roomId}
     par
       Lambda1 -> DynamoDb : UpdateItem Room by roomId "ADD clients [connectionId]"
-      return {roomId, clients: Set<connectionId>}
-      Lambda1 -> APIGateway1 : postToConnection() {type: "ClientList", clients: Array<ConnectionId>}
-      APIGateway1 -> Client1 : {type: "ClientList", clients: Array<ConnectionId>}
+      return {roomId, clients: Set[clientId1]}
+      Lambda1 -> APIGateway1 : postToConnection() {type: "ClientList", clients: Set[]}
+      APIGateway1 -> Client1 : {type: "ClientList", clients: Set[]}
       return
       return
     else
@@ -74,9 +74,9 @@ Client2 -> APIGateway2 : JoinRoom
 
     par
       Lambda2 -> DynamoDb : UpdateItem Room by roomId "ADD clients [connectionId]"
-      return {roomId, clients: Set<connectionId>}
-      Lambda2 -> APIGateway2 : postToConnection() {type: "ClientList", clients: Array<ConnectionId>}
-      APIGateway2 -> Client2 : {type: "ClientList", clients: Array<ConnectionId>}
+      return {roomId, clients: Set[clientId1, clientId2]}
+      Lambda2 -> APIGateway2 : postToConnection() {type: "ClientList", clients: Array[clientId2]}
+      APIGateway2 -> Client2 : {type: "ClientList", clients: Array[clientId2]}
       return
       return
     else
@@ -87,12 +87,23 @@ Client2 -> APIGateway2 : JoinRoom
     loop for each connection, except the current connection
       alt #lightblue
         Lambda2 -> APIGateway1 : postToConnection() {type: "ClientJoin", clientId: connectionId}
+          APIGateway1 -> Client1
+          return
         return
       else #pink 410 stale connection
         Lambda2 -> DynamoDb : UpdateItem Room by roomId "DELETE clients [connectionId]"
         return
       end
     end
+
+Client1 -> APIGateway1 : {action: "ConnectClient"}
+  APIGateway1 -> Lambda1
+    Lambda1 -> APIGateway2
+      APIGateway2 -> Client2
+      return
+    return
+  return
+return
 
     loop for each connection, except the current connection
       alt #lightblue

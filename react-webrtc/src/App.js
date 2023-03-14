@@ -1,7 +1,7 @@
 import "./App.css";
 import Router from "./Router";
-import Root from "./Root";
-import Room from "./Room";
+import Root from "./routes/root/Root";
+import Room from "./routes/room/Room";
 
 export default function App() {
   return (
@@ -9,7 +9,7 @@ export default function App() {
       <Router
         routeMap={[
           ["/", () => <Root />],
-          ["/([a-zA-Z0-9_-]+)/?", (roomKey) => <Room roomKey={roomKey} />],
+          ["/([a-zA-Z0-9_-]+)/?", (roomId) => <Room roomId={roomId} />],
           [null, () => <div>Path not found.</div>],
         ]}
       />

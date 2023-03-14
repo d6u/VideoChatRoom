@@ -77,6 +77,7 @@ Resources:
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDefault}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDisconnect}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionJoinRoom}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnectClient}:*
   # --- HTTP APIs ---
   ApiGatewayApiHttp:
     Type: AWS::ApiGatewayV2::Api
@@ -339,6 +340,59 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/JoinRoom
 
+  # --- WebSocket APIs route: ConnectClient ---
+  ApiGatewayRouteConnectClient:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteKey: ConnectClient
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationConnectClient
+  ApiGatewayIntegrationConnectClient:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionConnectClient.Arn}/invocations
+  ApiGatewayIntegrationResponseConnectClient:
+    Type: AWS::ApiGatewayV2::IntegrationResponse
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      IntegrationId: !Ref ApiGatewayIntegrationConnectClient
+      IntegrationResponseKey: $default
+  ApiGatewayRouteResponseConnectClient:
+    Type: AWS::ApiGatewayV2::RouteResponse
+    Properties:
+      ApiId: !Ref ApiGatewayApiWebSocket
+      RouteId: !Ref ApiGatewayRouteConnectClient
+      RouteResponseKey: $default
+  LambdaFunctionConnectClient:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        S3Bucket: gameroom-deployment
+        S3Key: !Ref LambdaSourceS3KeyConnectClient
+      Environment:
+        Variables:
+          ROOMS_TABLE_NAME: chatroom-db
+          CLIENTS_TABLE_NAME: gameroom_clients
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionConnectClient:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionConnectClient
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/ConnectClient
+
 # --- Outputs ---
 Outputs:
   HttpEndpointUrl:
@@ -358,3 +412,5 @@ Outputs:
     Value: !Ref LambdaFunctionDisconnect
   LambdaFunctionNameJoinRoom:
     Value: !Ref LambdaFunctionJoinRoom
+  LambdaFunctionNameConnectClient:
+    Value: !Ref LambdaFunctionConnectClient
