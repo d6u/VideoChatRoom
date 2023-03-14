@@ -47,7 +47,7 @@ export const handler = async (event, context) => {
         `https://${event.requestContext.domainName}/${event.requestContext.stage}`,
         response.Item.clients.SS,
         roomId,
-        JSON.stringify({ type: "client_joined", clientId: connectionId })
+        JSON.stringify({ type: "ClientJoin", clientId: connectionId })
       );
     } catch (err) {
       return {
