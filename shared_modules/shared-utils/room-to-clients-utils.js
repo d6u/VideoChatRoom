@@ -1,6 +1,21 @@
-import { PutItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
+import {
+  GetItemCommand,
+  PutItemCommand,
+  UpdateItemCommand,
+} from "@aws-sdk/client-dynamodb";
 
 const TABLE_NAME = process.env.TABLE_NAME_ROOM_TO_CLIENTS;
+
+export async function getRoomToClientsMap(dynamoDbClient, roomId) {
+  return await dynamoDbClient.send(
+    new GetItemCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        RoomId: { S: roomId },
+      },
+    })
+  );
+}
 
 export async function createRoomToClientsPlaceholder(dynamoDbClient, roomId) {
   await dynamoDbClient.send(
