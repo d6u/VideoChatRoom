@@ -1,28 +1,21 @@
-import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { nanoid } from "nanoid";
+import { getDynamoDbClient } from "shared-utils";
+import RoomSnapshotsUtils from "shared-utils/room-snapshots-utils.js";
 
-const client = new DynamoDBClient({ region: process.env.AWS_REGION });
+const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
 
 export const handler = async (event) => {
   const roomId = nanoid();
 
-  console.log(`Creating a new room, room ID is "${roomId}"`);
-
-  const command = new PutItemCommand({
-    TableName: process.env.ROOMS_TABLE_NAME,
-    Item: {
-      roomId: { S: roomId },
-    },
-  });
+  console.log(`Creating a new room ${roomId}.`);
 
   try {
-    await client.send(command);
-  } catch (err) {
-    console.error("Creating a new room failed.", err);
-
+    await RoomSnapshotsUtils.createRoomSnapshot(dynamoDbClient, roomId);
+  } catch (error) {
+    console.error("Creating a new room failed.", error);
     return {
       statusCode: 500,
-      body: JSON.stringify(err),
+      body: JSON.stringify({ error }),
     };
   }
 

@@ -14,6 +14,8 @@ Parameters:
     Type: String
   LambdaSourceS3KeyConnectClient:
     Type: String
+  LambdaSourceS3KeyRoomAction:
+    Type: String
 Resources:
   # --- Lambda IAM ---
   IamRoleLambdaShared:
@@ -32,8 +34,10 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
                 Resource:
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/chatroom-db
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/gameroom_clients
+                  - !GetAtt DynamoDbTableRoomSnapshots.Arn
+                  - !GetAtt DynamoDbTableRoomDeltas.Arn
+                  - !GetAtt DynamoDbTableRoomToClients.Arn
+                  - !GetAtt DynamoDbTableClientToRoom.Arn
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*/index/*
         - PolicyName: !Sub ${AWS::StackName}LambdaPostToWebSocketConnection
           PolicyDocument:
@@ -78,6 +82,79 @@ Resources:
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDisconnect}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionJoinRoom}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnectClient}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionRoomAction}:*
+  IamPolicyLambdaInteractSqs:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${AWS::StackName}LambdaInteractSqs
+      Roles:
+        - !Ref IamRoleLambdaShared
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource:
+              - !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${SqsQueueRoomActions.QueueName}
+
+  # --- DynamoDB ---
+  DynamoDbTableRoomSnapshots:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}RoomSnapshots
+      TableClass: STANDARD
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: RoomId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: RoomId
+          KeyType: HASH
+  DynamoDbTableRoomDeltas:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}RoomDeltas
+      TableClass: STANDARD
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: RoomId
+          AttributeType: S
+        - AttributeName: Seq
+          AttributeType: N
+      KeySchema:
+        - AttributeName: RoomId
+          KeyType: HASH
+        - AttributeName: Seq
+          KeyType: RANGE
+  DynamoDbTableRoomToClients:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}RoomToClients
+      TableClass: STANDARD
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: RoomId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: RoomId
+          KeyType: HASH
+  DynamoDbTableClientToRoom:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}ClientToRoom
+      TableClass: STANDARD
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ClientId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ClientId
+          KeyType: HASH
+
   # --- HTTP APIs ---
   ApiGatewayApiHttp:
     Type: AWS::ApiGatewayV2::Api
@@ -129,7 +206,10 @@ Resources:
         S3Key: !Ref LambdaSourceS3KeyCreateRoom
       Environment:
         Variables:
-          ROOMS_TABLE_NAME: chatroom-db
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
       TracingConfig:
         Mode: Active
   LambdaPermissionCreateRoom:
@@ -275,8 +355,10 @@ Resources:
         S3Key: !Ref LambdaSourceS3KeyDisconnect
       Environment:
         Variables:
-          ROOMS_TABLE_NAME: chatroom-db
-          CLIENTS_TABLE_NAME: gameroom_clients
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
       TracingConfig:
         Mode: Active
   LambdaPermissionDisconnect:
@@ -328,8 +410,11 @@ Resources:
         S3Key: !Ref LambdaSourceS3KeyJoinRoom
       Environment:
         Variables:
-          ROOMS_TABLE_NAME: chatroom-db
-          CLIENTS_TABLE_NAME: gameroom_clients
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
+          ROOM_ACTIONS_QUEUE_URL: !GetAtt SqsQueueRoomActions.QueueUrl
       TracingConfig:
         Mode: Active
   LambdaPermissionJoinRoom:
@@ -381,8 +466,10 @@ Resources:
         S3Key: !Ref LambdaSourceS3KeyConnectClient
       Environment:
         Variables:
-          ROOMS_TABLE_NAME: chatroom-db
-          CLIENTS_TABLE_NAME: gameroom_clients
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
       TracingConfig:
         Mode: Active
   LambdaPermissionConnectClient:
@@ -392,6 +479,39 @@ Resources:
       FunctionName: !Ref LambdaFunctionConnectClient
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/ConnectClient
+
+  # --- SQS ---
+  SqsQueueRoomActions:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}RoomActions.fifo
+      DeduplicationScope: messageGroup
+      FifoQueue: true
+  LambdaEventSourceMappingRoomAction:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref LambdaFunctionRoomAction
+      EventSourceArn: !GetAtt SqsQueueRoomActions.Arn
+  LambdaFunctionRoomAction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        S3Bucket: gameroom-deployment
+        S3Key: !Ref LambdaSourceS3KeyRoomAction
+      Environment:
+        Variables:
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
+          WEBSOCKET_API_ENDPOINT: !Sub ${ApiGatewayApiWebSocket.ApiEndpoint}/${ApiGatewayStageWebSocketStaging}
+      TracingConfig:
+        Mode: Active
 
 # --- Outputs ---
 Outputs:
@@ -414,3 +534,5 @@ Outputs:
     Value: !Ref LambdaFunctionJoinRoom
   LambdaFunctionNameConnectClient:
     Value: !Ref LambdaFunctionConnectClient
+  LambdaFunctionNameRoomAction:
+    Value: !Ref LambdaFunctionRoomAction
