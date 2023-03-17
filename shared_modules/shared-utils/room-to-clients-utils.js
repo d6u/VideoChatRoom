@@ -1,34 +1,53 @@
-const RoomToClientsUtils = {
-  /**
-   * @param {*} dynamoDbClient
-   * @param {ID} roomId
-   * @param {Array<ID>} clients
-   * @returns {Attributes: {clients: {SS: Array<ID>}}}
-   */
-  async addClients(dynamoDbClient, roomId, clients) {
-    const response = await dynamoDbClient.send(
-      new UpdateItemCommand({
-        TableName: process.env.ROOMS_TABLE_NAME,
-        Key: {
-          roomId: { S: roomId },
-        },
-        // By default, UpdateItem will perform create the record if it doesn't
-        // ready exist. By adding the ConditionExpression, we prevent creating new
-        // record if roomId cannot be found.
-        ConditionExpression: "attribute_exists(roomId)",
-        UpdateExpression: "ADD clients :vals",
-        ExpressionAttributeValues: {
-          ":vals": { SS: clients },
-        },
-        ReturnValues: "ALL_NEW",
-      })
-    );
+import { PutItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 
-    return {
-      roomId,
-      clients,
-    };
-  },
-};
+const TABLE_NAME = process.env.TABLE_NAME_ROOM_TO_CLIENTS;
 
-export default RoomToClientsUtils;
+export async function createRoomToClientsPlaceholder(dynamoDbClient, roomId) {
+  await dynamoDbClient.send(
+    new PutItemCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        RoomId: { S: roomId },
+      },
+    })
+  );
+}
+
+export async function addClientToRoom(dynamoDbClient, roomId, clientId) {
+  await dynamoDbClient.send(
+    new UpdateItemCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        RoomId: { S: roomId },
+      },
+      // By default, UpdateItem will perform create the record if it doesn't
+      // ready exist. By adding the ConditionExpression, we prevent creating new
+      // record if roomId cannot be found.
+      ConditionExpression: "attribute_exists(RoomId)",
+      UpdateExpression: "ADD ClientIds :vals",
+      ExpressionAttributeValues: {
+        ":vals": { SS: [clientId] },
+      },
+      ReturnValues: "ALL_NEW",
+    })
+  );
+}
+
+export async function removeClientFromRoom(dynamoDbClient, roomId, clientId) {
+  await dynamoDbClient.send(
+    new UpdateItemCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        RoomId: { S: roomId },
+      },
+      // By default, UpdateItem will perform create the record if it doesn't
+      // ready exist. By adding the ConditionExpression, we prevent creating new
+      // record if roomId cannot be found.
+      ConditionExpression: "attribute_exists(RoomId)",
+      UpdateExpression: "DELETE ClientIds :vals",
+      ExpressionAttributeValues: {
+        ":vals": { SS: [clientId] },
+      },
+    })
+  );
+}

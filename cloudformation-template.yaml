@@ -359,6 +359,7 @@ Resources:
           TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
           TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
           TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
+          ROOM_ACTIONS_QUEUE_URL: !GetAtt SqsQueueRoomActions.QueueUrl
       TracingConfig:
         Mode: Active
   LambdaPermissionDisconnect:

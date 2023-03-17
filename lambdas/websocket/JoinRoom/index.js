@@ -1,5 +1,7 @@
-import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
-import { addClientIdToRoom, postToClients, updateClient } from "./util.js";
+import { getDynamoDbClient, getSqsClient } from "shared-utils";
+import { addClientToRoom } from "shared-utils/room-to-clients-utils.js";
+import { sendActionToRoomActionsQueue } from "shared-utils/sqs-utils.js";
+import { createClientToRoomPair } from "shared-utils/client-to-room-utils.js";
 
 const ERROR_TYPES = {
   RoomNotFoundError: "RoomNotFoundError",
@@ -9,13 +11,17 @@ const ERROR_TYPES = {
   UpdateClientError: "UpdateClientError",
 };
 
+const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
+const sqsClient = getSqsClient(process.env.AWS_REGION);
+
 function parseEvent(event) {
   const {
-    requestContext: { connectionId },
+    requestContext: { requestId, connectionId },
     body,
   } = event;
   const { roomId } = JSON.parse(body);
   return {
+    requestId,
     connectionId,
     roomId,
   };
@@ -24,21 +30,24 @@ function parseEvent(event) {
 export async function handler(event, context) {
   console.log("Receiving event", event);
 
-  const endpoint = `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
-  const { connectionId, roomId } = parseEvent(event);
+  const { requestId, connectionId, roomId } = parseEvent(event);
 
-  // ===
+  // === Add connection ID to room to client map ===
 
   console.log(`Adding client ID ${connectionId} to room "${roomId}".`);
   let addClientIdToRoomResponse = null;
   try {
-    addClientIdToRoomResponse = await addClientIdToRoom(roomId, connectionId);
+    addClientIdToRoomResponse = await addClientToRoom(
+      dynamoDbClient,
+      roomId,
+      connectionId
+    );
   } catch (error) {
     if (error.name === "ConditionalCheckFailedException") {
       console.error(`Room "${roomId}" not found.`);
       return {
         statusCode: 404,
-        body: JONS.stringify({
+        body: JSON.stringify({
           errorType: ERROR_TYPES.RoomNotFoundError,
         }),
       };
@@ -60,64 +69,34 @@ export async function handler(event, context) {
     `Adding client ID ${connectionId} to room "${roomId}" succeeded.`
   );
 
-  // ===
-
-  const clients = addClientIdToRoomResponse.Attributes.clients.SS.filter(
-    (clientId) => clientId != connectionId
-  );
-  const apiGatewayManagementApi = new ApiGatewayManagementApi({ endpoint });
-  try {
-    await apiGatewayManagementApi.postToConnection({
-      ConnectionId: connectionId,
-      Data: JSON.stringify({ type: "ClientList", clients }),
-    });
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.PostToClientsError,
-        error,
-      }),
-    };
-  }
-
-  // ===
+  // === Create client to room pair ===
 
   try {
-    await updateClient(connectionId, roomId);
+    await createClientToRoomPair(dynamoDbClient, connectionId, roomId);
   } catch (error) {
     console.error(
-      `Updating clientId "${connectionId}" to "${roomId}" map failed.`,
+      `Creating client "${connectionId}" to room "${roomId}" failed.`,
       error
     );
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.UpdateClientError,
-        error,
-      }),
+      body: JSON.stringify({ error }),
     };
   }
-  console.log(
-    `Updating clientId "${connectionId}" to "${roomId}" map succeeded.`
-  );
 
-  // ===
+  // === Send message to queue ===
 
   try {
-    await postToClients(
-      endpoint,
-      clients,
+    await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
+      action: "ClientJoin",
       roomId,
-      JSON.stringify({ type: "ClientJoin", clientId: connectionId })
-    );
-  } catch (err) {
+      connectionId,
+    });
+  } catch (error) {
+    console.error(`Sending action to queue failed.`, error);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.PostToClientsError,
-        error: err,
-      }),
+      body: JSON.stringify({ error }),
     };
   }
 

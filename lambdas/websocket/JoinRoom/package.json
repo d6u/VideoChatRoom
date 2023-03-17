@@ -5,6 +5,8 @@
   "main": "index.js",
   "dependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.282.0",
-    "@aws-sdk/client-dynamodb": "^3.284.0"
+    "@aws-sdk/client-dynamodb": "^3.284.0",
+    "@aws-sdk/client-sqs": "^3.292.0",
+    "shared-utils": "file:../../../shared_modules/shared-utils"
   }
 }

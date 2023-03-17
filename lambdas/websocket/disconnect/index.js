@@ -1,166 +1,77 @@
+import { getDynamoDbClient, getSqsClient } from "shared-utils";
+import { removeClientFromRoom } from "shared-utils/room-to-clients-utils.js";
 import {
-  DynamoDBClient,
-  GetItemCommand,
-  UpdateItemCommand,
-  DeleteItemCommand,
-} from "@aws-sdk/client-dynamodb";
-import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
+  getClientToRoomPair,
+  deleteClientToRoomPair,
+} from "shared-utils/client-to-room-utils.js";
+import { sendActionToRoomActionsQueue } from "shared-utils/sqs-utils.js";
 
-const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
+const sqsClient = getSqsClient(process.env.AWS_REGION);
 
-const ERROR_TYPES = {
-  DELETE_CLIENT_ERROR: "DELETE_CLIENT_ERROR",
-};
+function parseEvent(event) {
+  const {
+    requestContext: { requestId, connectionId },
+  } = event;
+  return { requestId, connectionId };
+}
 
 export async function handler(event, context) {
-  const {
-    requestContext: { connectionId },
-    body,
-  } = event;
+  console.log("Handling event: ", event);
 
-  let response;
+  const { requestId, connectionId } = parseEvent(event);
 
+  let response = null;
   try {
-    response = await dynamoDbClient.send(
-      new GetItemCommand({
-        TableName: process.env.CLIENTS_TABLE_NAME,
-        Key: {
-          clientId: { S: connectionId },
-        },
-      })
-    );
-  } catch (err) {
-    console.error(`Getting client "${connectionId}" failed.`, err);
+    response = await getClientToRoomPair(dynamoDbClient, connectionId);
+  } catch (error) {
+    console.error(`Getting client "${connectionId}" failed.`, error);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.DELETE_CLIENT_ERROR,
-        error: err,
-      }),
+      body: JSON.stringify({ error }),
     };
   }
 
-  if (response.Item.roomId != null) {
-    const roomId = response.Item.roomId.S;
+  console.log("client to room pair: ", response);
+
+  if (response != null && response.Item.RoomId != null) {
+    const roomId = response.Item.RoomId.S;
 
     try {
-      await dynamoDbClient.send(
-        new UpdateItemCommand({
-          TableName: process.env.ROOMS_TABLE_NAME,
-          Key: {
-            roomId: { S: roomId },
-          },
-          UpdateExpression: "DELETE clients :vals",
-          ExpressionAttributeValues: {
-            ":vals": { SS: [connectionId] },
-          },
-        })
-      );
-    } catch (err) {
+      await removeClientFromRoom(dynamoDbClient, roomId, connectionId);
+    } catch (error) {
       console.error(
         `Deleting client "${connectionId}" from room ${roomId} failed.`,
-        err
+        error
       );
       return {
         statusCode: 500,
-        body: JSON.stringify({
-          error_type: ERROR_TYPES.DELETE_CLIENT_ERROR,
-          error: err,
-        }),
+        body: JSON.stringify({ error }),
       };
     }
-
-    let response2;
 
     try {
-      response2 = await dynamoDbClient.send(
-        new GetItemCommand({
-          TableName: process.env.ROOMS_TABLE_NAME,
-          Key: {
-            roomId: { S: roomId },
-          },
-        })
-      );
-    } catch (err) {
-      console.error(`Getting room "${roomId}" failed.`, err);
+      await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
+        action: "ClientLeft",
+        roomId,
+        connectionId,
+      });
+    } catch (error) {
+      console.error(`Sending action to queue failed.`, error);
       return {
         statusCode: 500,
-        body: JSON.stringify({
-          error_type: ERROR_TYPES.DELETE_CLIENT_ERROR,
-          error: err,
-        }),
+        body: JSON.stringify({ error }),
       };
-    }
-
-    if (response2.Item.clients != null) {
-      const clientIds = response2.Item.clients.SS;
-
-      const apigwManagementApi = new ApiGatewayManagementApi({
-        endpoint: `https://${event.requestContext.domainName}/${event.requestContext.stage}`,
-      });
-
-      const postToConnectionCalls = clientIds.map(async (connectionId2) => {
-        try {
-          await apigwManagementApi.postToConnection({
-            ConnectionId: connectionId2,
-            Data: JSON.stringify({
-              type: "ClientLeft",
-              clientId: connectionId,
-            }),
-          });
-        } catch (err) {
-          if (err["$metadata"].httpStatusCode === 410) {
-            console.log(`Found stale connection, deleting "${connectionId2}."`);
-
-            try {
-              await dynamoDbClient.send(
-                new UpdateItemCommand({
-                  TableName: process.env.ROOMS_TABLE_NAME,
-                  Key: {
-                    roomId: { S: roomId },
-                  },
-                  UpdateExpression: "DELETE clients :vals",
-                  ExpressionAttributeValues: {
-                    ":vals": { SS: [connectionId2] },
-                  },
-                })
-              );
-            } catch (err) {
-              console.error(
-                `Deleting "${connectionId2}" from room failed.`,
-                err
-              );
-            }
-          } else {
-            console.error(
-              `Posting to connection "${connectionId2}" failed.`,
-              err
-            );
-          }
-        }
-      });
-
-      await Promise.all(postToConnectionCalls);
     }
   }
 
   try {
-    await dynamoDbClient.send(
-      new DeleteItemCommand({
-        TableName: process.env.CLIENTS_TABLE_NAME,
-        Key: {
-          clientId: { S: connectionId },
-        },
-      })
-    );
-  } catch (err) {
+    await deleteClientToRoomPair(dynamoDbClient, connectionId);
+  } catch (error) {
     console.error(`Deleting client "${connectionId}" failed.`, err);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error_type: ERROR_TYPES.DELETE_CLIENT_ERROR,
-        error: err,
-      }),
+      body: JSON.stringify({ error }),
     };
   }
 
