@@ -1,5 +1,9 @@
 import { getDynamoDbClient, getApiGatewayManagement } from "shared-utils";
 import { getRoomToClientsMap } from "shared-utils/room-to-clients-utils.js";
+import {
+  applyClientJoinAction,
+  applyClientLeftAction,
+} from "shared-utils/room-snapshots-utils.js";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
 const apiGatewayManagementApi = getApiGatewayManagement(
@@ -43,13 +47,23 @@ async function processRecord(record) {
 
 async function handleClientJoinAction(body) {
   const { roomId, connectionId } = body;
-  const clientIds = await getClientIdsForBroadcasting(dynamoDbClient, roomId);
   try {
-    await postToClients(
-      clientIds,
+    const seq = await applyClientJoinAction(
+      dynamoDbClient,
       roomId,
-      JSON.stringify({ type: "ClientJoin", clientId: connectionId })
+      connectionId
     );
+    if (seq != null) {
+      const clientIds = await getClientIdsForBroadcasting(
+        dynamoDbClient,
+        roomId
+      );
+      await postToClients(
+        clientIds,
+        roomId,
+        JSON.stringify({ type: "ClientJoin", clientId: connectionId, seq })
+      );
+    }
   } catch (error) {
     console.error("Something went wrong.", error);
   }
@@ -57,13 +71,23 @@ async function handleClientJoinAction(body) {
 
 async function handleClientLeftAction(body) {
   const { roomId, connectionId } = body;
-  const clientIds = await getClientIdsForBroadcasting(dynamoDbClient, roomId);
   try {
-    await postToClients(
-      clientIds,
+    const seq = await applyClientLeftAction(
+      dynamoDbClient,
       roomId,
-      JSON.stringify({ type: "ClientJoin", clientId: connectionId })
+      connectionId
     );
+    if (seq != null) {
+      const clientIds = await getClientIdsForBroadcasting(
+        dynamoDbClient,
+        roomId
+      );
+      await postToClients(
+        clientIds,
+        roomId,
+        JSON.stringify({ type: "ClientLeft", clientId: connectionId, seq })
+      );
+    }
   } catch (error) {
     console.error("Something went wrong.", error);
   }

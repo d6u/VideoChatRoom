@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { getDynamoDbClient } from "shared-utils";
-import RoomSnapshotsUtils from "shared-utils/room-snapshots-utils.js";
+import { createRoomSnapshot } from "shared-utils/room-snapshots-utils.js";
 import { createRoomToClientsPlaceholder } from "shared-utils/room-to-clients-utils.js";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
@@ -11,7 +11,7 @@ export const handler = async (event) => {
   console.log(`Creating a new room ${roomId}.`);
 
   try {
-    await RoomSnapshotsUtils.createRoomSnapshot(dynamoDbClient, roomId);
+    await createRoomSnapshot(dynamoDbClient, roomId);
   } catch (error) {
     console.error("Creating a new room failed.", error);
     return {
