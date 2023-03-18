@@ -46,13 +46,9 @@ async function processRecord(record) {
 }
 
 async function handleClientJoinAction(body) {
-  const { roomId, connectionId } = body;
+  const { roomId, clientId } = body;
   try {
-    const seq = await applyClientJoinAction(
-      dynamoDbClient,
-      roomId,
-      connectionId
-    );
+    const seq = await applyClientJoinAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {
       const clientIds = await getClientIdsForBroadcasting(
         dynamoDbClient,
@@ -61,7 +57,12 @@ async function handleClientJoinAction(body) {
       await postToClients(
         clientIds,
         roomId,
-        JSON.stringify({ type: "ClientJoin", clientId: connectionId, seq })
+        JSON.stringify({
+          isDelta: true,
+          type: "ClientJoin",
+          seq,
+          clientId,
+        })
       );
     }
   } catch (error) {
@@ -70,13 +71,9 @@ async function handleClientJoinAction(body) {
 }
 
 async function handleClientLeftAction(body) {
-  const { roomId, connectionId } = body;
+  const { roomId, clientId } = body;
   try {
-    const seq = await applyClientLeftAction(
-      dynamoDbClient,
-      roomId,
-      connectionId
-    );
+    const seq = await applyClientLeftAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {
       const clientIds = await getClientIdsForBroadcasting(
         dynamoDbClient,
@@ -85,7 +82,12 @@ async function handleClientLeftAction(body) {
       await postToClients(
         clientIds,
         roomId,
-        JSON.stringify({ type: "ClientLeft", clientId: connectionId, seq })
+        JSON.stringify({
+          isDelta: true,
+          type: "ClientLeft",
+          seq,
+          clientId,
+        })
       );
     }
   } catch (error) {

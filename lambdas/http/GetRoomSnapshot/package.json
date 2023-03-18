@@ -1,5 +1,5 @@
 {
-  "name": "sqs-room-action",
+  "name": "http-create-room",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",

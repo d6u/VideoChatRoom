@@ -15,13 +15,15 @@ provider "aws" {
 
 locals {
   lambda_sources = {
-    CreateRoom    = "lambdas/http/CreateRoom"
-    connect       = "lambdas/websocket/connect"
-    default       = "lambdas/websocket/default"
-    disconnect    = "lambdas/websocket/disconnect"
-    JoinRoom      = "lambdas/websocket/JoinRoom"
-    ConnectClient = "lambdas/websocket/ConnectClient"
-    RoomAction    = "lambdas/sqs/RoomAction"
+    CreateRoom      = "lambdas/http/CreateRoom"
+    GetRoomDeltas   = "lambdas/http/GetRoomDeltas"
+    GetRoomSnapshot = "lambdas/http/GetRoomSnapshot"
+    connect         = "lambdas/websocket/connect"
+    default         = "lambdas/websocket/default"
+    disconnect      = "lambdas/websocket/disconnect"
+    JoinRoom        = "lambdas/websocket/JoinRoom"
+    ConnectClient   = "lambdas/websocket/ConnectClient"
+    RoomAction      = "lambdas/sqs/RoomAction"
   }
 }
 
@@ -63,13 +65,15 @@ resource "aws_cloudformation_stack" "gameroom_stack" {
   name         = "GameroomStack"
   capabilities = ["CAPABILITY_NAMED_IAM"]
   parameters = {
-    LambdaSourceS3KeyCreateRoom    = aws_s3_object.lambda_source_s3_objects["CreateRoom"].key
-    LambdaSourceS3KeyConnect       = aws_s3_object.lambda_source_s3_objects["connect"].key
-    LambdaSourceS3KeyDisconnect    = aws_s3_object.lambda_source_s3_objects["disconnect"].key
-    LambdaSourceS3KeyDefault       = aws_s3_object.lambda_source_s3_objects["default"].key
-    LambdaSourceS3KeyJoinRoom      = aws_s3_object.lambda_source_s3_objects["JoinRoom"].key
-    LambdaSourceS3KeyConnectClient = aws_s3_object.lambda_source_s3_objects["ConnectClient"].key
-    LambdaSourceS3KeyRoomAction    = aws_s3_object.lambda_source_s3_objects["RoomAction"].key
+    LambdaSourceS3KeyCreateRoom      = aws_s3_object.lambda_source_s3_objects["CreateRoom"].key
+    LambdaSourceS3KeyGetRoomDeltas   = aws_s3_object.lambda_source_s3_objects["GetRoomDeltas"].key
+    LambdaSourceS3KeyGetRoomSnapshot = aws_s3_object.lambda_source_s3_objects["GetRoomSnapshot"].key
+    LambdaSourceS3KeyConnect         = aws_s3_object.lambda_source_s3_objects["connect"].key
+    LambdaSourceS3KeyDisconnect      = aws_s3_object.lambda_source_s3_objects["disconnect"].key
+    LambdaSourceS3KeyDefault         = aws_s3_object.lambda_source_s3_objects["default"].key
+    LambdaSourceS3KeyJoinRoom        = aws_s3_object.lambda_source_s3_objects["JoinRoom"].key
+    LambdaSourceS3KeyConnectClient   = aws_s3_object.lambda_source_s3_objects["ConnectClient"].key
+    LambdaSourceS3KeyRoomAction      = aws_s3_object.lambda_source_s3_objects["RoomAction"].key
   }
   template_body = file("cloudformation-template.yaml")
 }
@@ -85,30 +89,6 @@ output "http_endpoint_url" {
 
 output "websocket_endpoint_url" {
   value = local.websocket_endpoint_url
-}
-
-output "lambda_function_name_create_room" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameCreateRoom"]
-}
-
-output "lambda_function_name_connect" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameConnect"]
-}
-
-output "lambda_function_name_default" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameDefault"]
-}
-
-output "lambda_function_name_disconnect" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameDisconnect"]
-}
-
-output "lambda_function_name_join_room" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameJoinRoom"]
-}
-
-output "lambda_function_name_room_action" {
-  value = aws_cloudformation_stack.gameroom_stack.outputs["LambdaFunctionNameRoomAction"]
 }
 
 resource "local_file" "api_endpoints" {

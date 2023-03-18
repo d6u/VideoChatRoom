@@ -54,7 +54,7 @@ export async function handler(event, context) {
       await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
         action: "ClientLeft",
         roomId,
-        connectionId,
+        clientId: connectionId,
       });
     } catch (error) {
       console.error(`Sending action to queue failed.`, error);

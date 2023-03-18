@@ -4,6 +4,10 @@ Description: >
 Parameters:
   LambdaSourceS3KeyCreateRoom:
     Type: String
+  LambdaSourceS3KeyGetRoomDeltas:
+    Type: String
+  LambdaSourceS3KeyGetRoomSnapshot:
+    Type: String
   LambdaSourceS3KeyConnect:
     Type: String
   LambdaSourceS3KeyDisconnect:
@@ -77,12 +81,15 @@ Resources:
               - logs:PutLogEvents
             Resource:
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionCreateRoom}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionGetRoomDeltas}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionGetRoomSnapshot}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnect}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDefault}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDisconnect}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionJoinRoom}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnectClient}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionRoomAction}:*
+              - !GetAtt LogsLogGroupHttpApiAccessLog.Arn
   IamPolicyLambdaInteractSqs:
     Type: AWS::IAM::Policy
     Properties:
@@ -155,6 +162,13 @@ Resources:
         - AttributeName: ClientId
           KeyType: HASH
 
+  # --- CloudWatch ---
+  LogsLogGroupHttpApiAccessLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ${AWS::StackName}HttpApiAccessLog
+      RetentionInDays: 30
+
   # --- HTTP APIs ---
   ApiGatewayApiHttp:
     Type: AWS::ApiGatewayV2::Api
@@ -174,6 +188,13 @@ Resources:
       ApiId: !Ref ApiGatewayApiHttp
       StageName: $default
       AutoDeploy: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt LogsLogGroupHttpApiAccessLog.Arn
+        Format: >
+          {"requestId":"$context.requestId", "ip": "$context.identity.sourceIp",
+          "caller":"$context.identity.caller",
+          "user":"$context.identity.user","requestTime":"$context.requestTime","routeKey":"$context.routeKey",
+          "status":"$context.status"}
 
   # --- HTTP APIs route: POST /rooms ---
   ApiGatewayRouteCreateRoom:
@@ -219,6 +240,96 @@ Resources:
       FunctionName: !Ref LambdaFunctionCreateRoom
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiHttp.ApiId}/*/*/rooms
+
+  # --- HTTP APIs route: GET /rooms/{roomId}/deltas ---
+  ApiGatewayRouteGetRoomDeltas:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      RouteKey: "GET /rooms/{roomId}/deltas"
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationGetRoomDeltas
+  ApiGatewayIntegrationGetRoomDeltas:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      IntegrationMethod: GET
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LambdaFunctionGetRoomDeltas.Arn
+      PayloadFormatVersion: 2.0
+  LambdaFunctionGetRoomDeltas:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        S3Bucket: gameroom-deployment
+        S3Key: !Ref LambdaSourceS3KeyGetRoomDeltas
+      Environment:
+        Variables:
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionGetRoomDeltas:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionGetRoomDeltas
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiHttp.ApiId}/*/*/*
+
+  # --- HTTP APIs route: GET /rooms/{roomId}/snapshot ---
+  ApiGatewayRouteGetRoomSnapshot:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      RouteKey: "GET /rooms/{roomId}/snapshot"
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref ApiGatewayIntegrationGetRoomSnapshot
+  ApiGatewayIntegrationGetRoomSnapshot:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGatewayApiHttp
+      IntegrationMethod: GET
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LambdaFunctionGetRoomSnapshot.Arn
+      PayloadFormatVersion: 2.0
+  LambdaFunctionGetRoomSnapshot:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures:
+        - arm64
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt IamRoleLambdaShared.Arn
+      Code:
+        S3Bucket: gameroom-deployment
+        S3Key: !Ref LambdaSourceS3KeyGetRoomSnapshot
+      Environment:
+        Variables:
+          TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
+          TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
+          TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
+          TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
+      TracingConfig:
+        Mode: Active
+  LambdaPermissionGetRoomSnapshot:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionGetRoomSnapshot
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiHttp.ApiId}/*/*/*
 
   # --- WebSocket APIs ---
   ApiGatewayApiWebSocket:
@@ -523,17 +634,3 @@ Outputs:
       - /
       - - !GetAtt ApiGatewayApiWebSocket.ApiEndpoint
         - staging
-  LambdaFunctionNameCreateRoom:
-    Value: !Ref LambdaFunctionCreateRoom
-  LambdaFunctionNameConnect:
-    Value: !Ref LambdaFunctionConnect
-  LambdaFunctionNameDefault:
-    Value: !Ref LambdaFunctionDefault
-  LambdaFunctionNameDisconnect:
-    Value: !Ref LambdaFunctionDisconnect
-  LambdaFunctionNameJoinRoom:
-    Value: !Ref LambdaFunctionJoinRoom
-  LambdaFunctionNameConnectClient:
-    Value: !Ref LambdaFunctionConnectClient
-  LambdaFunctionNameRoomAction:
-    Value: !Ref LambdaFunctionRoomAction

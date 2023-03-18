@@ -90,7 +90,7 @@ export async function handler(event, context) {
     await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
       action: "ClientJoin",
       roomId,
-      connectionId,
+      clientId: connectionId,
     });
   } catch (error) {
     console.error(`Sending action to queue failed.`, error);
@@ -102,5 +102,10 @@ export async function handler(event, context) {
 
   return {
     statusCode: 200,
+    body: JSON.stringify({
+      isDelta: false,
+      type: "CurrentClientId",
+      clientId: connectionId,
+    }),
   };
 }

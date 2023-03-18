@@ -1,10 +1,18 @@
-## Initialize
+## Update local npm package
+
+Run this in repo root:
+
+```
+echo lambdas/*/* | sed "s/ /\n/g" | xargs -t -I'{}' bash -c 'cd {} && rm -r node_modules/shared-utils && npm i'
+```
+
+## Initialize and deploy
 
 ```
 terraform init
 terraform validate
 terraform plan
-terraform apply
+terraform apply -auto-approve
 ```
 
 ## Notes
