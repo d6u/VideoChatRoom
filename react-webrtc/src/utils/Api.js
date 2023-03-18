@@ -1,18 +1,34 @@
 import endpoints from "../api_endpoints.json";
 
-async function createRoom() {
+export async function createRoom() {
   const response = await fetch(`${endpoints.http_endpoint_url}/rooms`, {
     method: "POST",
     mode: "cors",
   });
 
-  const body = await response.json();
-
-  return body.roomId;
+  return await response.json();
 }
 
-const Api = {
-  createRoom,
-};
+export async function getRoomSnapshot(roomId) {
+  const response = await fetch(
+    `${endpoints.http_endpoint_url}/rooms/${roomId}/snapshot`,
+    {
+      method: "GET",
+      mode: "cors",
+    }
+  );
 
-export default Api;
+  return await response.json();
+}
+
+export async function getRoomDeltas(roomId, fromSeq, toSeq) {
+  const response = await fetch(
+    `${endpoints.http_endpoint_url}/rooms/${roomId}/snapshot?fromSeq=${fromSeq}&toSeq=${toSeq}`,
+    {
+      method: "GET",
+      mode: "cors",
+    }
+  );
+
+  return await response.json();
+}

@@ -7,99 +7,95 @@ const WEBRTC_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
-export default class PeerConnectionManager {
-  isDestroyed = false;
-  callbakcs = {};
+export default class PeerConnectionManager extends EventTarget {
+  isStopped = false;
 
-  constructor(targetClientKey, callbakcs) {
-    this.targetClientKey = targetClientKey;
-    this.callbakcs = callbakcs;
+  constructor(remoteClientId) {
+    console.log(`Creating PeerConnectionManager(${remoteClientId})`);
+    super();
+    this.remoteClientId = remoteClientId;
   }
 
   createConnection() {
+    console.debug("Creating connection.");
+
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
     this.pc.onsignalingstatechange = (event) => {
-      if (this.isDestroyed) {
-        return null;
+      if (this.isStopped) {
+        return;
       }
       console.debug(
-        `Target client key: ${this.targetClientKey} | onsignalingstatechange: ${this.pc.signalingState}`
+        `${this.remoteClientId} | onsignalingstatechange: ${this.pc.signalingState}`
       );
     };
 
     this.pc.onconnectionstatechange = (event) => {
-      if (this.isDestroyed) {
-        return null;
+      if (this.isStopped) {
+        return;
       }
       console.debug(
-        `Target client key: ${this.targetClientKey} | onconnectionstatechange ${this.pc.connectionState}`
+        `${this.remoteClientId} | onconnectionstatechange ${this.pc.connectionState}`
       );
       switch (this.pc.connectionState) {
-        case "failed": {
-          for (const listener of this.onPeerConnectionEndListeners) {
-            listener();
-          }
+        case "failed":
+          this.dispatchEvent(new Event("failed"));
           break;
-        }
-        default: {
+        default:
           break;
-        }
       }
     };
 
     this.pc.onicegatheringstatechange = (event) => {
-      if (this.isDestroyed) {
-        return null;
+      if (this.isStopped) {
+        return;
       }
       console.debug(
-        `Target client key: ${this.targetClientKey} | onicegatheringstatechange ${this.pc.iceGatheringState}`
+        `${this.remoteClientId} | onicegatheringstatechange ${this.pc.iceGatheringState}`
       );
     };
 
     this.pc.oniceconnectionstatechange = (event) => {
-      if (this.isDestroyed) {
-        return null;
+      if (this.isStopped) {
+        return;
       }
       console.debug(
-        `Target client key: ${this.targetClientKey} | oniceconnectionstatechange ${this.pc.iceConnectionState}`
+        `${this.remoteClientId} | oniceconnectionstatechange ${this.pc.iceConnectionState}`
       );
     };
 
     this.pc.ontrack = (event) => {
-      if (this.isDestroyed) {
-        return null;
-      }
-      console.debug(
-        `Target client key: ${this.targetClientKey} | ontrack: ${event.track.kind}, ${event.track.id}`
-      );
-      this.callbakcs["onTrack"](event.track);
-    };
-
-    this.pc.onicecandidate = (event) => {
-      if (this.isDestroyed) {
-        return null;
-      }
-      if (!event.candidate) {
-        console.debug(
-          `Target client key: ${this.targetClientKey} | No more ICE candidate.`
-        );
+      if (this.isStopped) {
         return;
       }
       console.debug(
-        `Target client key: ${this.targetClientKey} | onicecandidate.`
+        `${this.remoteClientId} | ontrack: ${event.track.kind}, ${event.track.id}`
       );
-      this.callbakcs["onIceCandidate"](event.candidate);
+      this.dispatchEvent(new CustomEvent("track", { detail: event.track }));
+    };
+
+    this.pc.onicecandidate = (event) => {
+      if (this.isStopped) {
+        return;
+      }
+      if (!event.candidate) {
+        console.debug(`${this.remoteClientId} | No more ICE candidate.`);
+        return;
+      }
+      console.debug(`${this.remoteClientId} | onicecandidate.`);
+      this.dispatchEvent(
+        new CustomEvent("icecandidate", { detail: event.candidate })
+      );
     };
   }
 
   async createOffer() {
     const offer = await this.pc.createOffer();
-    if (this.isDestroyed) {
+    if (this.isStopped) {
       return null;
     }
     await this.pc.setLocalDescription(offer);
-    if (this.isDestroyed) {
+    if (this.isStopped) {
       return null;
     }
     return offer;
@@ -107,15 +103,15 @@ export default class PeerConnectionManager {
 
   async setOfferAndCreateAnswer(offer) {
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
-    if (this.isDestroyed) {
+    if (this.isStopped) {
       return null;
     }
     const answer = await this.pc.createAnswer();
-    if (this.isDestroyed) {
+    if (this.isStopped) {
       return null;
     }
     await this.pc.setLocalDescription(answer);
-    if (this.isDestroyed) {
+    if (this.isStopped) {
       return null;
     }
     return answer;
@@ -137,11 +133,7 @@ export default class PeerConnectionManager {
   }
 
   destroy() {
-    console.debug(
-      `Target client key: ${this.targetClientKey} | Destroying PeerConnectionManager.`
-    );
-
-    this.isDestroyed = true;
+    this.isStopped = true;
 
     if (this.pc != null) {
       this.pc.close();

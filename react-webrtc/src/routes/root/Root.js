@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
-import Api from "../../utils/Api";
+import { createRoom } from "../../utils/Api";
 
 export default function Root() {
   const [roomId, setRoomId] = useState("");
 
   const onCreateNewRoom = useCallback(async () => {
-    const roomId = await Api.createRoom();
+    const { roomId } = await createRoom();
     window.history.pushState(null, "", `/${roomId}`);
   }, []);
 

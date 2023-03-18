@@ -1,11 +1,7 @@
 import endpoints from "../api_endpoints.json";
 
-export default class WebSocketManager {
+export default class WebSocketManager extends EventTarget {
   isStopped = false;
-
-  constructor(eventHandlers) {
-    this.eventHandlers = eventHandlers;
-  }
 
   connect() {
     if (this.isStopped) {
@@ -18,10 +14,8 @@ export default class WebSocketManager {
       if (this.isStopped) {
         return;
       }
-
       console.debug("WebSocket open.");
-
-      this.eventHandlers["open"]();
+      this.dispatchEvent(new Event("open"));
     });
 
     this.webSocket.addEventListener("message", (event) => {
@@ -39,7 +33,7 @@ export default class WebSocketManager {
           console.error("JSON parse error.", err);
         }
         if (data != null) {
-          this.eventHandlers["message"](data);
+          this.dispatchEvent(new CustomEvent("message", { detail: data }));
         }
       }
     });
@@ -52,7 +46,7 @@ export default class WebSocketManager {
       // More detail in https://www.rfc-editor.org/rfc/rfc6455#section-11.7
       console.debug("WebSocket closed.", event.code);
 
-      this.eventHandlers["close"]();
+      this.dispatchEvent(new Event("close"));
     });
   }
 
