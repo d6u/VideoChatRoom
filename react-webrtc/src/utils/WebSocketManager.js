@@ -8,6 +8,10 @@ export default class WebSocketManager {
   }
 
   connect() {
+    if (this.isStopped) {
+      throw new Error("This instance is already stopped.");
+    }
+
     this.webSocket = new WebSocket(endpoints.websocket_endpoint_url);
 
     this.webSocket.addEventListener("open", (event) => {
@@ -15,7 +19,7 @@ export default class WebSocketManager {
         return;
       }
 
-      console.log("WebSocket open.");
+      console.debug("WebSocket open.");
 
       this.eventHandlers["open"]();
     });
@@ -25,16 +29,17 @@ export default class WebSocketManager {
         return;
       }
 
-      console.log("WebSocket new message.", event.data);
+      console.debug("WebSocket new message:", event.data);
 
       if (event.data) {
+        let data = null;
         try {
-          this.eventHandlers["message"](JSON.parse(event.data));
+          data = JSON.parse(event.data);
         } catch (err) {
-          console.error(
-            "JSON parse error when parsing WebSocket message.",
-            err
-          );
+          console.error("JSON parse error.", err);
+        }
+        if (data != null) {
+          this.eventHandlers["message"](data);
         }
       }
     });
@@ -45,17 +50,27 @@ export default class WebSocketManager {
 
     this.webSocket.addEventListener("close", (event) => {
       // More detail in https://www.rfc-editor.org/rfc/rfc6455#section-11.7
-      console.log("WebSocket closed.", event.code);
+      console.debug("WebSocket closed.", event.code);
+
       this.eventHandlers["close"]();
     });
   }
 
   close() {
     this.isStopped = true;
-    this.webSocket.close();
+    if (this.webSocket != null) {
+      this.webSocket.close();
+    }
   }
 
   send(data) {
+    if (this.isStopped) {
+      throw new Error("This instance is already stopped.");
+    }
+    if (this.webSocket == null) {
+      throw new Error("WebSocket is not created yet.");
+    }
+
     this.webSocket.send(JSON.stringify(data));
   }
 }
