@@ -3,6 +3,7 @@ import PeerConnectionManager from "./PeerConnectionManager";
 
 const Client = Record({
   peerConnectionManager: null,
+  localMediaStreamSubsriber: null,
   localRandomValue: -1,
   connectionRole: "UNKNOWN",
   peerConnectionRole: "UNKNOWN",
@@ -14,10 +15,10 @@ export default class PeerConnectionsManager extends EventTarget {
   clientIds = Set();
   oldClientIds = Set();
   clients = Map();
-  localMediaStream = null;
 
-  constructor() {
+  constructor(localMediaStreamSubject) {
     super();
+    this.localMediaStreamSubject = localMediaStreamSubject;
     this.addEventListener("data", this.handleData);
     this.addEventListener("connectclient", this.handleConnectClient);
   }
@@ -39,10 +40,6 @@ export default class PeerConnectionsManager extends EventTarget {
     this.dispatchEvent(new Event("data"));
   }
 
-  setLocalStream(stream) {
-    this.localMediaStream = stream;
-  }
-
   handleData = () => {
     const joinedClientIds = this.clientIds.subtract(this.oldClientIds);
     const leftClientIds = this.oldClientIds.subtract(this.clientIds);
@@ -57,6 +54,13 @@ export default class PeerConnectionsManager extends EventTarget {
     leftClientIds.forEach((clientId) => {
       if (this.clients.getIn([clientId, "peerConnectionManager"]) != null) {
         this.clients.getIn([clientId, "peerConnectionManager"]).destroy();
+      }
+      if (
+        this.clientIds.getIn([clientId, "localMediaStreamSubsriber"]) != null
+      ) {
+        this.clientIds
+          .getIn([clientId, "localMediaStreamSubsriber"])
+          .unsubscribe();
       }
       this.clients = this.clients.delete(clientId);
     });
@@ -122,18 +126,19 @@ export default class PeerConnectionsManager extends EventTarget {
 
         peerConnectionManager.createConnection();
 
-        if (this.localMediaStream != null) {
-          this.localMediaStream.getTracks().forEach((track) => {
-            peerConnectionManager.addTrack(track, this.localMediaStream);
+        const localMediaStreamSubsriber =
+          this.localMediaStreamSubject.subscribe((mediaStream) => {
+            mediaStream.getTracks().forEach((track) => {
+              peerConnectionManager.addTrack(track, mediaStream);
+            });
           });
-        } else {
-          console.warn("this.localMediaStream is not set yet");
-        }
 
-        this.clients = this.clients.setIn(
-          [fromClientId, "peerConnectionManager"],
-          peerConnectionManager
-        );
+        this.clients = this.clients
+          .setIn([fromClientId, "peerConnectionManager"], peerConnectionManager)
+          .setIn(
+            [fromClientId, "localMediaStreamSubsriber"],
+            localMediaStreamSubsriber
+          );
 
         if (
           this.clients.getIn([fromClientId, "localRandomValue"]) > -1 &&

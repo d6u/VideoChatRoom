@@ -1,3 +1,4 @@
+import { from, BehaviorSubject } from "rxjs";
 import { useEffect, useRef, useState } from "react";
 import WebSocketManager from "../../utils/WebSocketManager";
 import RoomStateSyncManager from "../../utils/RoomStateSyncManager";
@@ -7,7 +8,7 @@ import ClientBox from "./ClientBox";
 export default function Room(props) {
   const { roomId } = props;
 
-  const localMediaStreamRef = useRef(null);
+  const refLocalMediaStreamSubject = useRef(new BehaviorSubject(null));
   const peerConnectionsManagerRef = useRef(null);
 
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
@@ -24,10 +25,12 @@ export default function Room(props) {
 
     setConnectionStatus("Connecting");
 
-    const peerConnectionsManager = new PeerConnectionsManager();
+    const peerConnectionsManager = new PeerConnectionsManager(
+      refLocalMediaStreamSubject.current
+    );
     peerConnectionsManagerRef.current = peerConnectionsManager;
     const roomStateSyncManager = new RoomStateSyncManager(roomId);
-    const webSocketManager = new WebSocketManager();
+    const ws = new WebSocketManager();
 
     // === PeerConnectionsManager ===
 
@@ -40,7 +43,7 @@ export default function Room(props) {
         detail: { clientId, randomValue },
       } = event;
 
-      webSocketManager.send({
+      ws.send({
         action: "ConnectClient",
         targetClientId: clientId,
         messageData: {
@@ -54,7 +57,7 @@ export default function Room(props) {
         detail: { clientId, offer },
       } = event;
 
-      webSocketManager.send({
+      ws.send({
         action: "ConnectClient",
         targetClientId: clientId,
         messageData: offer,
@@ -65,7 +68,7 @@ export default function Room(props) {
         detail: { clientId, answer },
       } = event;
 
-      webSocketManager.send({
+      ws.send({
         action: "ConnectClient",
         targetClientId: clientId,
         messageData: answer,
@@ -99,12 +102,14 @@ export default function Room(props) {
 
     // === WebSocketManager ===
 
-    function webSocketManagerOnOpen() {
+    const wsOpenSubscriber = ws.openObserver.subscribe(() => {
       setConnectionStatus("Connected");
-      webSocketManager.send({ action: "JoinRoom", roomId });
-    }
-    function webSocketManagerOnMessage(event) {
-      const { detail } = event;
+      ws.send({ action: "JoinRoom", roomId });
+    });
+    const wsCloseSubscriber = ws.closeObserver.subscribe(() => {
+      setConnectionStatus("Disconnected");
+    });
+    const wsMessageSubscriber = ws.messageObserver.subscribe((detail) => {
       if (detail.isDelta) {
         switch (detail.type) {
           case "ClientJoin":
@@ -138,14 +143,8 @@ export default function Room(props) {
           }
         }
       }
-    }
-    function webSocketManagerOnClose() {
-      setConnectionStatus("Disconnected");
-    }
-    webSocketManager.addEventListener("open", webSocketManagerOnOpen);
-    webSocketManager.addEventListener("message", webSocketManagerOnMessage);
-    webSocketManager.addEventListener("close", webSocketManagerOnClose);
-    webSocketManager.connect();
+    });
+    ws.connect();
 
     console.groupEnd();
     return () => {
@@ -154,13 +153,10 @@ export default function Room(props) {
 
       isStopped = true;
 
-      webSocketManager.close();
-      webSocketManager.removeEventListener("open", webSocketManagerOnOpen);
-      webSocketManager.removeEventListener(
-        "message",
-        webSocketManagerOnMessage
-      );
-      webSocketManager.removeEventListener("close", webSocketManagerOnClose);
+      ws.close();
+      wsOpenSubscriber.unsubscribe();
+      wsCloseSubscriber.unsubscribe();
+      wsMessageSubscriber.unsubscribe();
 
       roomStateSyncManager.destroy();
       roomStateSyncManager.removeEventListener(
@@ -181,30 +177,30 @@ export default function Room(props) {
   }, [roomId]);
 
   useEffect(() => {
-    let isStopped = false;
+    let localMediaStreamTmp = null;
 
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((mediaStream) => {
-        if (isStopped) {
-          return;
-        }
-
+    from(
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    ).subscribe({
+      next: (mediaStream) => {
+        localMediaStreamTmp = mediaStream;
         setLocalMediaStream(mediaStream);
-        peerConnectionsManagerRef.current.setLocalStream(mediaStream);
-        localMediaStreamRef.current = mediaStream;
-      })
-      .catch((err) => console.warn("Getting user media failed.", err));
+        refLocalMediaStreamSubject.current.next(mediaStream);
+      },
+      error: (err) => {
+        console.warn("Getting user media failed.", err);
+        localMediaStreamTmp = null;
+        setLocalMediaStream(null);
+        refLocalMediaStreamSubject.current.next(null);
+      },
+    });
 
     return () => {
-      isStopped = true;
-
-      if (localMediaStreamRef.current != null) {
-        localMediaStreamRef.current
-          .getTracks()
-          .forEach((track) => track.stop());
-        localMediaStreamRef.current = null;
+      if (localMediaStreamTmp != null) {
+        localMediaStreamTmp.getTracks().forEach((track) => track.stop());
       }
+      setLocalMediaStream(null);
+      refLocalMediaStreamSubject.current.next(null);
     };
   }, []);
 
