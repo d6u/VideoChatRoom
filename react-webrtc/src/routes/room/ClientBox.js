@@ -5,14 +5,52 @@ export default function ClientBox(props) {
   let { clientId, localMediaStream, client } = props;
 
   const isLocal = client.connectionRole === "LOCAL";
+  const isRemote = client.connectionRole === "REMOTE";
 
   const videoRef = useRef(null);
 
   useEffect(() => {
+    let videoTrackSubjectSubscriber = null;
+    let audioTrackSubjectSubscriber = null;
+
     if (isLocal) {
       videoRef.current.srcObject = localMediaStream;
+    } else if (isRemote) {
+      videoTrackSubjectSubscriber = client.videoTrackSubject.subscribe(
+        (videoTrack) => {
+          console.log("client.videoTrackSubject", videoTrack);
+          if (videoRef.current.srcObject == null) {
+            videoRef.current.srcObject = new MediaStream();
+          }
+          videoRef.current.srcObject.addTrack(videoTrack);
+        }
+      );
+      audioTrackSubjectSubscriber = client.audioTrackSubject.subscribe(
+        (audioTrack) => {
+          console.log("client.audioTrackSubject", audioTrack);
+          if (videoRef.current.srcObject == null) {
+            videoRef.current.srcObject = new MediaStream();
+          }
+          videoRef.current.srcObject.addTrack(audioTrack);
+        }
+      );
     }
-  }, [isLocal, localMediaStream]);
+
+    return () => {
+      if (videoTrackSubjectSubscriber != null) {
+        videoTrackSubjectSubscriber.unsubscribe();
+      }
+      if (audioTrackSubjectSubscriber != null) {
+        audioTrackSubjectSubscriber.unsubscribe();
+      }
+    };
+  }, [
+    isLocal,
+    isRemote,
+    localMediaStream,
+    client.videoTrackSubject,
+    client.audioTrackSubject,
+  ]);
 
   return (
     <div

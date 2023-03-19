@@ -1,8 +1,16 @@
+import { from, Subject } from "rxjs";
 import { Record, Set, List } from "immutable";
 import { getRoomSnapshot, getRoomDeltas } from "./Api";
 
+function log(...args) {
+  console.debug("%cRoomStateSyncManager", "background: yellow", ...args);
+}
+
+function logError(...args) {
+  console.error("%cRoomStateSyncManager", "background: yellow", ...args);
+}
+
 const Snapshot = Record({
-  isSynced: false,
   roomId: "",
   seq: -1,
   clientIds: Set(),
@@ -16,7 +24,7 @@ const Delta = Record({
 
 function reduce(snapshot, delta) {
   if (delta.seq - snapshot.seq !== 1) {
-    console.error(
+    logError(
       "Sequence number for snapshot and delta don't match.",
       snapshot,
       delta
@@ -45,11 +53,10 @@ export default class RoomStateSyncManager extends EventTarget {
   isStopped = false;
   isFillingDeltaGap = false;
   roomId = null;
-  snapshot = Snapshot();
+  snapshot = null;
   deltas = List();
 
   constructor(roomId) {
-    // console.debug(`RoomStateSyncManager ctor(${roomId})`);
     super();
     this.roomId = roomId;
     this.addEventListener("data", this.handleData);
@@ -64,7 +71,7 @@ export default class RoomStateSyncManager extends EventTarget {
   }
 
   handleData = () => {
-    if (this.isStopped || !this.snapshot.isSynced || this.deltas.size === 0) {
+    if (this.isStopped || this.snapshot == null || this.deltas.size === 0) {
       return;
     }
 
@@ -72,8 +79,8 @@ export default class RoomStateSyncManager extends EventTarget {
       .filter((delta) => delta.seq > this.snapshot.seq)
       .sortBy((delta) => delta.seq);
 
-    console.log(this.deltas.toJS());
-    console.log(this.snapshot.toJS());
+    log("this.deltas", this.deltas.toJS());
+    log("this.snapshot", this.snapshot.toJS());
 
     const firstDelta = this.deltas.get(0);
 
@@ -93,7 +100,7 @@ export default class RoomStateSyncManager extends EventTarget {
             this.dispatchEvent(new Event("data"));
           })
           .catch((error) => {
-            console.error("getRoomDeltas() error.", error);
+            logError("getRoomDeltas() error.", error);
           });
       }
       return;
@@ -128,14 +135,15 @@ export default class RoomStateSyncManager extends EventTarget {
         if (this.isStopped) {
           return;
         }
-        this.snapshot = this.snapshot
-          .set("isSynced", true)
-          .set("seq", snapshot.seq)
-          .set("clientIds", Set(snapshot.clientIds));
+        this.snapshot = Snapshot({
+          roomId: this.roomId,
+          seq: snapshot.seq,
+          clientIds: Set(snapshot.clientIds),
+        });
         this.dispatchEvent(new Event("data"));
       })
       .catch((error) => {
-        console.error("getRoomSnapshot() error.", error);
+        logError("getRoomSnapshot() error.", error);
       });
   }
 }

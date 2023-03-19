@@ -10,7 +10,7 @@ function logError(...args) {
   console.error("%cWebSocketManager", "background: lightgreen", ...args);
 }
 
-export default class WebSocketManager extends EventTarget {
+export default class WebSocketManager {
   webSocketSubject = null;
   subscription = null;
   openObserver = new Subject();
@@ -20,6 +20,14 @@ export default class WebSocketManager extends EventTarget {
   connect() {
     this.webSocketSubject = webSocket({
       url: endpoints.websocket_endpoint_url,
+      deserializer: (event) => {
+        try {
+          return JSON.parse(event.data);
+        } catch (error) {
+          logError("JSON parse error.", event.data);
+          return {};
+        }
+      },
       openObserver: {
         next: (data) => {
           log("onopen", data);
@@ -40,7 +48,7 @@ export default class WebSocketManager extends EventTarget {
         log("onmessage", data);
         this.messageObserver.next(data);
       },
-      error(error) {
+      error: (error) => {
         // There is no error detail for WebSocket errors.
         logError("onerror", error);
       },
@@ -48,18 +56,14 @@ export default class WebSocketManager extends EventTarget {
   }
 
   close() {
-    if (this.webSocketSubject != null) {
-      this.webSocketSubject.complete();
-    }
+    this.webSocketSubject?.complete();
   }
 
   send(data) {
     if (this.webSocketSubject == null) {
       throw new Error("WebSocket is not created yet.");
     }
-
     log("sending message", JSON.stringify(data));
-
     this.webSocketSubject.next(data);
   }
 }

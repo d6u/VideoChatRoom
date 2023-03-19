@@ -179,7 +179,7 @@ export default function Room(props) {
   useEffect(() => {
     let localMediaStreamTmp = null;
 
-    from(
+    const getUserMediaSubscription = from(
       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     ).subscribe({
       next: (mediaStream) => {
@@ -189,16 +189,12 @@ export default function Room(props) {
       },
       error: (err) => {
         console.warn("Getting user media failed.", err);
-        localMediaStreamTmp = null;
-        setLocalMediaStream(null);
-        refLocalMediaStreamSubject.current.next(null);
       },
     });
 
     return () => {
-      if (localMediaStreamTmp != null) {
-        localMediaStreamTmp.getTracks().forEach((track) => track.stop());
-      }
+      getUserMediaSubscription.unsubscribe();
+      localMediaStreamTmp?.getTracks().forEach((track) => track.stop());
       setLocalMediaStream(null);
       refLocalMediaStreamSubject.current.next(null);
     };

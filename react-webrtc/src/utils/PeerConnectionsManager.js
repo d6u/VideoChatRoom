@@ -1,9 +1,20 @@
+import { BehaviorSubject } from "rxjs";
 import { Record, Set, Map, List } from "immutable";
 import PeerConnectionManager from "./PeerConnectionManager";
+
+function log(...args) {
+  console.debug("%cPeerConnectionsManager", "background: lightblue", ...args);
+}
+
+function logError(...args) {
+  console.error("%cPeerConnectionsManager", "background: lightblue", ...args);
+}
 
 const Client = Record({
   peerConnectionManager: null,
   localMediaStreamSubsriber: null,
+  videoTrackSubject: null,
+  audioTrackSubject: null,
   localRandomValue: -1,
   connectionRole: "UNKNOWN",
   peerConnectionRole: "UNKNOWN",
@@ -44,7 +55,7 @@ export default class PeerConnectionsManager extends EventTarget {
     const joinedClientIds = this.clientIds.subtract(this.oldClientIds);
     const leftClientIds = this.oldClientIds.subtract(this.clientIds);
 
-    console.log({
+    log({
       joinedClientIds: joinedClientIds.toJS(),
       leftClientIds: leftClientIds.toJS(),
     });
@@ -69,7 +80,13 @@ export default class PeerConnectionsManager extends EventTarget {
 
     joinedClientIds.forEach((clientId) => {
       if (!this.clients.has(clientId)) {
-        this.clients = this.clients.set(clientId, Client());
+        this.clients = this.clients.set(
+          clientId,
+          Client({
+            videoTrackSubject: new BehaviorSubject(null),
+            audioTrackSubject: new BehaviorSubject(null),
+          })
+        );
       }
 
       const connectionRole =
@@ -116,12 +133,21 @@ export default class PeerConnectionsManager extends EventTarget {
 
         peerConnectionManager.addEventListener("icecandidate", (event) => {
           const { detail } = event;
-          console.log("icecandidate", detail);
+          log("icecandidate", detail);
         });
 
         peerConnectionManager.addEventListener("track", (event) => {
           const { detail } = event;
-          console.log("track", detail);
+          log("track", detail);
+          if (detail.kind === "video") {
+            this.clients
+              .getIn([fromClientId, "videoTrackSubject"])
+              .next(detail);
+          } else if (detail.kind === "audio") {
+            this.clients
+              .getIn([fromClientId, "audioTrackSubject"])
+              .next(detail);
+          }
         });
 
         peerConnectionManager.createConnection();
