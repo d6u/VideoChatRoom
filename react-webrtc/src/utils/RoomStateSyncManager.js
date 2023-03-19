@@ -72,6 +72,9 @@ export default class RoomStateSyncManager extends EventTarget {
       .filter((delta) => delta.seq > this.snapshot.seq)
       .sortBy((delta) => delta.seq);
 
+    console.log(this.deltas.toJS());
+    console.log(this.snapshot.toJS());
+
     const firstDelta = this.deltas.get(0);
 
     if (firstDelta.seq - this.snapshot.seq > 1) {

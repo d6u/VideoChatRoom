@@ -65,6 +65,8 @@ export default class WebSocketManager extends EventTarget {
       throw new Error("WebSocket is not created yet.");
     }
 
+    console.debug("WebSocket send message: ", JSON.stringify(data));
+
     this.webSocket.send(JSON.stringify(data));
   }
 }

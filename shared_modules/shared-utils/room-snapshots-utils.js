@@ -74,7 +74,7 @@ export async function applyClientJoinAction(dynamoDbClient, roomId, clientId) {
               RoomId: { S: roomId },
               // Number type must be sent as string.
               Seq: { N: String(newSeq) },
-              Action: { S: "ClientJoin" },
+              Type: { S: "ClientJoin" },
               ClientId: { S: clientId },
             },
           },
@@ -128,7 +128,7 @@ export async function applyClientLeftAction(dynamoDbClient, roomId, clientId) {
               RoomId: { S: roomId },
               // Number type must be sent as string.
               Seq: { N: String(newSeq) },
-              Action: { S: "ClientLeft" },
+              Type: { S: "ClientLeft" },
               ClientId: { S: clientId },
             },
           },

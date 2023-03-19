@@ -1,13 +1,20 @@
+import { Record, Set, Map, List } from "immutable";
 import PeerConnectionManager from "./PeerConnectionManager";
+
+const Client = Record({
+  peerConnectionManager: null,
+  localRandomValue: -1,
+  connectionRole: "UNKNOWN",
+  peerConnectionRole: "UNKNOWN",
+});
 
 export default class PeerConnectionsManager extends EventTarget {
   isStopped = false;
-
   currentClientId = null;
-  clientIds = [];
-  oldClientIds = [];
-
-  clients = {};
+  clientIds = Set();
+  oldClientIds = Set();
+  clients = Map();
+  localMediaStream = null;
 
   constructor() {
     super();
@@ -28,28 +35,37 @@ export default class PeerConnectionsManager extends EventTarget {
 
   setClientIds(clientIds) {
     this.oldClientIds = this.clientIds;
-    this.clientIds = clientIds;
+    this.clientIds = Set(clientIds);
     this.dispatchEvent(new Event("data"));
   }
 
+  setLocalStream(stream) {
+    this.localMediaStream = stream;
+  }
+
   handleData = () => {
+    const joinedClientIds = this.clientIds.subtract(this.oldClientIds);
+    const leftClientIds = this.oldClientIds.subtract(this.clientIds);
+
+    console.log({
+      joinedClientIds: joinedClientIds.toJS(),
+      leftClientIds: leftClientIds.toJS(),
+    });
+
     // === Clean up old client info ===
 
-    for (const clientId of this.oldClientIds) {
-      if (this.clientIds.indexOf(clientId) > -1) {
-        continue;
+    leftClientIds.forEach((clientId) => {
+      if (this.clients.getIn([clientId, "peerConnectionManager"]) != null) {
+        this.clients.getIn([clientId, "peerConnectionManager"]).destroy();
       }
-      if (this.clients[clientId].peerConnectionManager != null) {
-        this.clients[clientId].peerConnectionManager.destroy();
-      }
-      this.clients[clientId] = null;
-    }
+      this.clients = this.clients.delete(clientId);
+    });
 
     // === Creating new client info ===
 
-    for (const clientId of this.clientIds) {
-      if (this.clients[clientId] == null) {
-        this.clients[clientId] = {};
+    joinedClientIds.forEach((clientId) => {
+      if (!this.clients.has(clientId)) {
+        this.clients = this.clients.set(clientId, Client());
       }
 
       const connectionRole =
@@ -61,49 +77,113 @@ export default class PeerConnectionsManager extends EventTarget {
 
       if (
         connectionRole === "REMOTE" &&
-        this.clients[clientId].peerConnectionManager == null
+        this.clients.getIn([clientId, "peerConnectionManager"]) == null
       ) {
         const randomValue = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
+        this.clients = this.clients.setIn(
+          [clientId, "localRandomValue"],
+          randomValue
+        );
+
         this.dispatchEvent(
           new CustomEvent("selectleader", { detail: { clientId, randomValue } })
         );
-        this.clients[clientId].localRandomValue = randomValue;
       }
 
-      this.clients[clientId].connectionRole = connectionRole;
-    }
+      this.clients = this.clients.setIn(
+        [clientId, "connectionRole"],
+        connectionRole
+      );
+    });
 
     this.dispatchEvent(new CustomEvent("clients", { detail: this.clients }));
   };
 
   handleConnectClient = (event) => {
     const { fromClientId, messageData } = event.detail;
+
     switch (messageData.type) {
       case "SelectingLeader": {
-        if (this.clients[fromClientId] != null) {
-          if (
-            this.clients[fromClientId].localRandomValue <
-            messageData.randomValue
-          ) {
-            this.clients[fromClientId].peerConnectionRole = "ANSWER";
-          } else {
-            this.clients[fromClientId].peerConnectionRole = "OFFER";
-
-            const peerConnectionManager = new PeerConnectionManager(
-              fromClientId
-            );
-            this.clients[fromClientId].peerConnectionManager =
-              peerConnectionManager;
-
-            // peerConnectionManager.
-          }
+        if (!this.clients.has(fromClientId)) {
+          return;
         }
+
+        const peerConnectionManager = new PeerConnectionManager(fromClientId);
+
+        peerConnectionManager.addEventListener("icecandidate", (event) => {
+          const { detail } = event;
+          console.log("icecandidate", detail);
+        });
+
+        peerConnectionManager.addEventListener("track", (event) => {
+          const { detail } = event;
+          console.log("track", detail);
+        });
+
+        peerConnectionManager.createConnection();
+
+        if (this.localMediaStream != null) {
+          this.localMediaStream.getTracks().forEach((track) => {
+            peerConnectionManager.addTrack(track, this.localMediaStream);
+          });
+        } else {
+          console.warn("this.localMediaStream is not set yet");
+        }
+
+        this.clients = this.clients.setIn(
+          [fromClientId, "peerConnectionManager"],
+          peerConnectionManager
+        );
+
+        if (
+          this.clients.getIn([fromClientId, "localRandomValue"]) > -1 &&
+          this.clients.getIn([fromClientId, "localRandomValue"]) <
+            messageData.randomValue
+        ) {
+          this.clients = this.clients.setIn(
+            [fromClientId, "peerConnectionRole"],
+            "ANSWER"
+          );
+        } else {
+          this.clients = this.clients.setIn(
+            [fromClientId, "peerConnectionRole"],
+            "OFFER"
+          );
+
+          peerConnectionManager.createOffer().then((offer) => {
+            this.dispatchEvent(
+              new CustomEvent("offeravailable", {
+                detail: { clientId: fromClientId, offer },
+              })
+            );
+          });
+        }
+        break;
+      }
+      case "answer": {
+        this.clients
+          .getIn([fromClientId, "peerConnectionManager"])
+          .setAnswer(messageData);
+        break;
+      }
+      case "offer": {
+        this.clients
+          .getIn([fromClientId, "peerConnectionManager"])
+          .setOfferAndCreateAnswer(messageData)
+          .then((answer) => {
+            this.dispatchEvent(
+              new CustomEvent("answeravailable", {
+                detail: { clientId: fromClientId, answer },
+              })
+            );
+          });
         break;
       }
       default: {
         break;
       }
     }
+
     this.dispatchEvent(new CustomEvent("clients", { detail: this.clients }));
   };
 }

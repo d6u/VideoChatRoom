@@ -4,10 +4,6 @@ import classNames from "classnames";
 export default function ClientBox(props) {
   let { clientId, localMediaStream, client } = props;
 
-  if (client == null) {
-    client = {};
-  }
-
   const isLocal = client.connectionRole === "LOCAL";
 
   const videoRef = useRef(null);

@@ -23,7 +23,7 @@ export async function getRoomSnapshot(roomId) {
 
 export async function getRoomDeltas(roomId, fromSeq, toSeq) {
   const response = await fetch(
-    `${endpoints.http_endpoint_url}/rooms/${roomId}/snapshot?fromSeq=${fromSeq}&toSeq=${toSeq}`,
+    `${endpoints.http_endpoint_url}/rooms/${roomId}/deltas?fromSeq=${fromSeq}&toSeq=${toSeq}`,
     {
       method: "GET",
       mode: "cors",

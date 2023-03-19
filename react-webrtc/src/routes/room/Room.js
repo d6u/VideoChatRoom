@@ -8,12 +8,12 @@ export default function Room(props) {
   const { roomId } = props;
 
   const localMediaStreamRef = useRef(null);
+  const peerConnectionsManagerRef = useRef(null);
 
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
   const [currentClientId, setCurrentClientId] = useState(null);
-  const [roomState, setRoomState] = useState(null);
   const [localMediaStream, setLocalMediaStream] = useState(null);
-  const [clients, setClients] = useState({});
+  const [clients, setClients] = useState(null);
 
   useEffect(() => {
     console.group("Room");
@@ -25,6 +25,7 @@ export default function Room(props) {
     setConnectionStatus("Connecting");
 
     const peerConnectionsManager = new PeerConnectionsManager();
+    peerConnectionsManagerRef.current = peerConnectionsManager;
     const roomStateSyncManager = new RoomStateSyncManager(roomId);
     const webSocketManager = new WebSocketManager();
 
@@ -48,6 +49,28 @@ export default function Room(props) {
         },
       });
     }
+    function peerConnectionsManagerOnOfferAvailable(event) {
+      const {
+        detail: { clientId, offer },
+      } = event;
+
+      webSocketManager.send({
+        action: "ConnectClient",
+        targetClientId: clientId,
+        messageData: offer,
+      });
+    }
+    function peerConnectionsManagerOnAnswerAvailable(event) {
+      const {
+        detail: { clientId, answer },
+      } = event;
+
+      webSocketManager.send({
+        action: "ConnectClient",
+        targetClientId: clientId,
+        messageData: answer,
+      });
+    }
     peerConnectionsManager.addEventListener(
       "clients",
       peerConnectionsManagerOnClients
@@ -56,12 +79,19 @@ export default function Room(props) {
       "selectleader",
       peerConnectionsManagerOnSelectleader
     );
+    peerConnectionsManager.addEventListener(
+      "offeravailable",
+      peerConnectionsManagerOnOfferAvailable
+    );
+    peerConnectionsManager.addEventListener(
+      "answeravailable",
+      peerConnectionsManagerOnAnswerAvailable
+    );
 
     // === RoomStateSyncManager ===
 
     function roomStateSyncManagerOnState(event) {
       const { detail } = event;
-      setRoomState(detail);
       peerConnectionsManager.setClientIds(detail.clientIds);
     }
     roomStateSyncManager.addEventListener("state", roomStateSyncManagerOnState);
@@ -143,6 +173,7 @@ export default function Room(props) {
         "clients",
         peerConnectionsManagerOnClients
       );
+      peerConnectionsManagerRef.current = null;
 
       console.groupEnd();
       console.groupEnd();
@@ -160,9 +191,10 @@ export default function Room(props) {
         }
 
         setLocalMediaStream(mediaStream);
+        peerConnectionsManagerRef.current.setLocalStream(mediaStream);
         localMediaStreamRef.current = mediaStream;
       })
-      .catch((err) => console.error("Getting user media failed.", err));
+      .catch((err) => console.warn("Getting user media failed.", err));
 
     return () => {
       isStopped = true;
@@ -185,14 +217,15 @@ export default function Room(props) {
         Current client ID: <code>{currentClientId}</code>
       </h2>
       <div className="Room_videos-container">
-        {roomState == null
-          ? null
-          : roomState.clientIds.map((id) => (
+        {clients &&
+          clients
+            .toArray()
+            .map(([clientId, client]) => (
               <ClientBox
-                key={id}
-                clientId={id}
+                key={clientId}
+                clientId={clientId}
                 localMediaStream={localMediaStream}
-                client={clients[id]}
+                client={client}
               />
             ))}
       </div>
