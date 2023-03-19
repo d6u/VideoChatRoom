@@ -22,7 +22,9 @@ export default function ClientBox(props) {
           if (videoRef.current.srcObject == null) {
             videoRef.current.srcObject = new MediaStream();
           }
-          videoRef.current.srcObject.addTrack(videoTrack);
+          if (videoTrack != null) {
+            videoRef.current.srcObject.addTrack(videoTrack);
+          }
         }
       );
       audioTrackSubjectSubscriber = client.audioTrackSubject.subscribe(
@@ -31,18 +33,16 @@ export default function ClientBox(props) {
           if (videoRef.current.srcObject == null) {
             videoRef.current.srcObject = new MediaStream();
           }
-          videoRef.current.srcObject.addTrack(audioTrack);
+          if (audioTrack != null) {
+            videoRef.current.srcObject.addTrack(audioTrack);
+          }
         }
       );
     }
 
     return () => {
-      if (videoTrackSubjectSubscriber != null) {
-        videoTrackSubjectSubscriber.unsubscribe();
-      }
-      if (audioTrackSubjectSubscriber != null) {
-        audioTrackSubjectSubscriber.unsubscribe();
-      }
+      videoTrackSubjectSubscriber?.unsubscribe();
+      audioTrackSubjectSubscriber?.unsubscribe();
     };
   }, [
     isLocal,

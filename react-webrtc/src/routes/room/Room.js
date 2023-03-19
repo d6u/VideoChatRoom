@@ -9,7 +9,6 @@ export default function Room(props) {
   const { roomId } = props;
 
   const refLocalMediaStreamSubject = useRef(new BehaviorSubject(null));
-  const peerConnectionsManagerRef = useRef(null);
 
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
   const [currentClientId, setCurrentClientId] = useState(null);
@@ -25,113 +24,94 @@ export default function Room(props) {
 
     setConnectionStatus("Connecting");
 
-    const peerConnectionsManager = new PeerConnectionsManager(
-      refLocalMediaStreamSubject.current
-    );
-    peerConnectionsManagerRef.current = peerConnectionsManager;
+    const pcsm = new PeerConnectionsManager(refLocalMediaStreamSubject.current);
     const roomStateSyncManager = new RoomStateSyncManager(roomId);
     const ws = new WebSocketManager();
 
     // === PeerConnectionsManager ===
 
-    function peerConnectionsManagerOnClients(event) {
-      const { detail } = event;
-      setClients(detail);
-    }
-    function peerConnectionsManagerOnSelectleader(event) {
-      const {
-        detail: { clientId, randomValue },
-      } = event;
-
-      ws.send({
-        action: "ConnectClient",
-        targetClientId: clientId,
-        messageData: {
-          type: "SelectingLeader",
-          randomValue,
-        },
-      });
-    }
-    function peerConnectionsManagerOnOfferAvailable(event) {
-      const {
-        detail: { clientId, offer },
-      } = event;
-
-      ws.send({
-        action: "ConnectClient",
-        targetClientId: clientId,
-        messageData: offer,
-      });
-    }
-    function peerConnectionsManagerOnAnswerAvailable(event) {
-      const {
-        detail: { clientId, answer },
-      } = event;
-
-      ws.send({
-        action: "ConnectClient",
-        targetClientId: clientId,
-        messageData: answer,
-      });
-    }
-    peerConnectionsManager.addEventListener(
-      "clients",
-      peerConnectionsManagerOnClients
+    const pcsmClientsSubscription = pcsm.clientsSubject.subscribe(setClients);
+    const pcsmSelectLeaderSubscription = pcsm.selectLeaderSubject.subscribe(
+      ({ clientId, randomValue }) => {
+        ws.send({
+          action: "ConnectClient",
+          targetClientId: clientId,
+          messageData: {
+            type: "SelectingLeader",
+            randomValue,
+          },
+        });
+      }
     );
-    peerConnectionsManager.addEventListener(
-      "selectleader",
-      peerConnectionsManagerOnSelectleader
+    const pcsmOfferSubscription = pcsm.offerSubject.subscribe(
+      ({ clientId, offer }) => {
+        ws.send({
+          action: "ConnectClient",
+          targetClientId: clientId,
+          messageData: offer,
+        });
+      }
     );
-    peerConnectionsManager.addEventListener(
-      "offeravailable",
-      peerConnectionsManagerOnOfferAvailable
+    const pcsmAnswerSubscription = pcsm.answerSubject.subscribe(
+      ({ clientId, answer }) => {
+        ws.send({
+          action: "ConnectClient",
+          targetClientId: clientId,
+          messageData: answer,
+        });
+      }
     );
-    peerConnectionsManager.addEventListener(
-      "answeravailable",
-      peerConnectionsManagerOnAnswerAvailable
+    const pcsmIceSubscription = pcsm.iceSubject.subscribe(
+      ({ clientId, candidate }) => {
+        ws.send({
+          action: "ConnectClient",
+          targetClientId: clientId,
+          messageData: candidate,
+        });
+      }
     );
 
     // === RoomStateSyncManager ===
 
     function roomStateSyncManagerOnState(event) {
       const { detail } = event;
-      peerConnectionsManager.setClientIds(detail.clientIds);
+      pcsm.setClientIds(detail.clientIds);
     }
     roomStateSyncManager.addEventListener("state", roomStateSyncManagerOnState);
     roomStateSyncManager.start();
 
     // === WebSocketManager ===
 
-    const wsOpenSubscriber = ws.openObserver.subscribe(() => {
+    const wsOpenSubscription = ws.openObserver.subscribe(() => {
       setConnectionStatus("Connected");
       ws.send({ action: "JoinRoom", roomId });
     });
-    const wsCloseSubscriber = ws.closeObserver.subscribe(() => {
+    const wsCloseSubscription = ws.closeObserver.subscribe(() => {
       setConnectionStatus("Disconnected");
     });
-    const wsMessageSubscriber = ws.messageObserver.subscribe((detail) => {
-      if (detail.isDelta) {
-        switch (detail.type) {
+    const wsMessageSubscription = ws.messageObserver.subscribe((data) => {
+      if (data.isDelta) {
+        switch (data.type) {
           case "ClientJoin":
           case "ClientLeft":
             roomStateSyncManager.dispatchEvent(
-              new CustomEvent("delta", { detail })
+              new CustomEvent("delta", { detail: data })
             );
             break;
           default:
             break;
         }
       } else {
-        switch (detail.type) {
+        switch (data.type) {
           case "CurrentClientId": {
-            const { clientId } = detail;
+            const { clientId } = data;
             setCurrentClientId(clientId);
-            peerConnectionsManager.setCurrentClientId(clientId);
+            pcsm.setCurrentClientId(clientId);
             break;
           }
           case "ConnectClient": {
-            const { fromClientId, messageData } = detail;
-            peerConnectionsManager.dispatchEvent(
+            const { fromClientId, messageData } = data;
+            pcsm.dispatchEvent(
               new CustomEvent("connectclient", {
                 detail: { fromClientId, messageData },
               })
@@ -154,9 +134,9 @@ export default function Room(props) {
       isStopped = true;
 
       ws.close();
-      wsOpenSubscriber.unsubscribe();
-      wsCloseSubscriber.unsubscribe();
-      wsMessageSubscriber.unsubscribe();
+      wsOpenSubscription.unsubscribe();
+      wsCloseSubscription.unsubscribe();
+      wsMessageSubscription.unsubscribe();
 
       roomStateSyncManager.destroy();
       roomStateSyncManager.removeEventListener(
@@ -164,12 +144,12 @@ export default function Room(props) {
         roomStateSyncManagerOnState
       );
 
-      peerConnectionsManager.destroy();
-      peerConnectionsManager.removeEventListener(
-        "clients",
-        peerConnectionsManagerOnClients
-      );
-      peerConnectionsManagerRef.current = null;
+      pcsm.destroy();
+      pcsmClientsSubscription.unsubscribe();
+      pcsmSelectLeaderSubscription.unsubscribe();
+      pcsmOfferSubscription.unsubscribe();
+      pcsmAnswerSubscription.unsubscribe();
+      pcsmIceSubscription.unsubscribe();
 
       console.groupEnd();
       console.groupEnd();

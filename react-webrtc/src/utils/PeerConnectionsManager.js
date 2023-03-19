@@ -1,4 +1,4 @@
-import { BehaviorSubject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 import { Record, Set, Map, List } from "immutable";
 import PeerConnectionManager from "./PeerConnectionManager";
 
@@ -26,6 +26,11 @@ export default class PeerConnectionsManager extends EventTarget {
   clientIds = Set();
   oldClientIds = Set();
   clients = Map();
+  clientsSubject = new BehaviorSubject(Map());
+  selectLeaderSubject = new Subject();
+  offerSubject = new Subject();
+  answerSubject = new Subject();
+  iceSubject = new Subject();
 
   constructor(localMediaStreamSubject) {
     super();
@@ -106,9 +111,7 @@ export default class PeerConnectionsManager extends EventTarget {
           randomValue
         );
 
-        this.dispatchEvent(
-          new CustomEvent("selectleader", { detail: { clientId, randomValue } })
-        );
+        this.selectLeaderSubject.next({ clientId, randomValue });
       }
 
       this.clients = this.clients.setIn(
@@ -117,7 +120,7 @@ export default class PeerConnectionsManager extends EventTarget {
       );
     });
 
-    this.dispatchEvent(new CustomEvent("clients", { detail: this.clients }));
+    this.clientsSubject.next(this.clients);
   };
 
   handleConnectClient = (event) => {
@@ -134,6 +137,7 @@ export default class PeerConnectionsManager extends EventTarget {
         peerConnectionManager.addEventListener("icecandidate", (event) => {
           const { detail } = event;
           log("icecandidate", detail);
+          this.iceSubject.next({ clientId: fromClientId, candidate: detail });
         });
 
         peerConnectionManager.addEventListener("track", (event) => {
@@ -182,11 +186,7 @@ export default class PeerConnectionsManager extends EventTarget {
           );
 
           peerConnectionManager.createOffer().then((offer) => {
-            this.dispatchEvent(
-              new CustomEvent("offeravailable", {
-                detail: { clientId: fromClientId, offer },
-              })
-            );
+            this.offerSubject.next({ clientId: fromClientId, offer });
           });
         }
         break;
@@ -202,19 +202,20 @@ export default class PeerConnectionsManager extends EventTarget {
           .getIn([fromClientId, "peerConnectionManager"])
           .setOfferAndCreateAnswer(messageData)
           .then((answer) => {
-            this.dispatchEvent(
-              new CustomEvent("answeravailable", {
-                detail: { clientId: fromClientId, answer },
-              })
-            );
+            this.answerSubject.next({ clientId: fromClientId, answer });
           });
         break;
       }
       default: {
+        log("====>", messageData);
+        // ICE
+        this.clients
+          .getIn([fromClientId, "peerConnectionManager"])
+          .addIceCandidate(messageData);
         break;
       }
     }
 
-    this.dispatchEvent(new CustomEvent("clients", { detail: this.clients }));
+    this.clientsSubject.next(this.clients);
   };
 }

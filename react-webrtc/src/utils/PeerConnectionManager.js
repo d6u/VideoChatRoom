@@ -1,3 +1,5 @@
+import { combineLatestWith, Subject } from "rxjs";
+
 const WEBRTC_CONFIG = {
   iceServers: [
     {
@@ -7,17 +9,35 @@ const WEBRTC_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
+function log(...args) {
+  console.log(
+    "%cPeerConnectionManager",
+    "background: blue; color: white",
+    ...args
+  );
+}
+
+function logError(...args) {
+  console.error(
+    "%cPeerConnectionManager",
+    "background: blue; color: white",
+    ...args
+  );
+}
+
 export default class PeerConnectionManager extends EventTarget {
   isStopped = false;
+  iceCandidatesSubject = new Subject();
+  remoteDescriptionSetSubject = new Subject();
 
   constructor(remoteClientId) {
-    console.log(`Creating PeerConnectionManager(${remoteClientId})`);
+    log(`Creating PeerConnectionManager(${remoteClientId})`);
     super();
     this.remoteClientId = remoteClientId;
   }
 
   createConnection() {
-    console.debug("Creating connection.");
+    log("Creating connection.");
 
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
@@ -25,7 +45,7 @@ export default class PeerConnectionManager extends EventTarget {
       if (this.isStopped) {
         return;
       }
-      console.debug(
+      log(
         `${this.remoteClientId} | onsignalingstatechange: ${this.pc.signalingState}`
       );
     };
@@ -34,7 +54,7 @@ export default class PeerConnectionManager extends EventTarget {
       if (this.isStopped) {
         return;
       }
-      console.debug(
+      log(
         `${this.remoteClientId} | onconnectionstatechange ${this.pc.connectionState}`
       );
       switch (this.pc.connectionState) {
@@ -50,7 +70,7 @@ export default class PeerConnectionManager extends EventTarget {
       if (this.isStopped) {
         return;
       }
-      console.debug(
+      log(
         `${this.remoteClientId} | onicegatheringstatechange ${this.pc.iceGatheringState}`
       );
     };
@@ -59,7 +79,7 @@ export default class PeerConnectionManager extends EventTarget {
       if (this.isStopped) {
         return;
       }
-      console.debug(
+      log(
         `${this.remoteClientId} | oniceconnectionstatechange ${this.pc.iceConnectionState}`
       );
     };
@@ -68,7 +88,7 @@ export default class PeerConnectionManager extends EventTarget {
       if (this.isStopped) {
         return;
       }
-      console.debug(
+      log(
         `${this.remoteClientId} | ontrack: ${event.track.kind}, ${event.track.id}`
       );
       this.dispatchEvent(new CustomEvent("track", { detail: event.track }));
@@ -79,14 +99,20 @@ export default class PeerConnectionManager extends EventTarget {
         return;
       }
       if (!event.candidate) {
-        console.debug(`${this.remoteClientId} | No more ICE candidate.`);
+        log(`${this.remoteClientId} | No more ICE candidate.`);
         return;
       }
-      console.debug(`${this.remoteClientId} | onicecandidate.`);
+      log(`${this.remoteClientId} | onicecandidate.`);
       this.dispatchEvent(
         new CustomEvent("icecandidate", { detail: event.candidate })
       );
     };
+
+    this.iceCandidatesSubject
+      .pipe(combineLatestWith(this.remoteDescriptionSetSubject))
+      .subscribe(([iceCandidate]) => {
+        this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+      });
   }
 
   async createOffer() {
@@ -103,6 +129,7 @@ export default class PeerConnectionManager extends EventTarget {
 
   async setOfferAndCreateAnswer(offer) {
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
+    this.remoteDescriptionSetSubject.next();
     if (this.isStopped) {
       return null;
     }
@@ -122,10 +149,11 @@ export default class PeerConnectionManager extends EventTarget {
       return;
     }
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
+    this.remoteDescriptionSetSubject.next();
   }
 
-  async addIceCandidate(iceCandidate) {
-    await this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+  addIceCandidate(iceCandidate) {
+    this.iceCandidatesSubject.next(iceCandidate);
   }
 
   addTrack(track, stream) {
