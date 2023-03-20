@@ -1,56 +1,52 @@
 import { useEffect, useRef, useState } from "react";
 import classNames from "classnames";
 
-export default function ClientBox(props) {
-  let { clientId, localMediaStream, client } = props;
-
-  const isLocal = client.connectionRole === "LOCAL";
-  const isRemote = client.connectionRole === "REMOTE";
+export default function ClientBox({
+  clientId,
+  localMediaStream,
+  localClientId,
+}) {
+  const isLocal = localClientId != null && clientId === localClientId;
+  const isRemote = localClientId != null && clientId !== localClientId;
 
   const videoRef = useRef(null);
 
   useEffect(() => {
-    let videoTrackSubjectSubscriber = null;
-    let audioTrackSubjectSubscriber = null;
+    // let videoTrackSubjectSubscriber = null;
+    // let audioTrackSubjectSubscriber = null;
 
     if (isLocal) {
       videoRef.current.srcObject = localMediaStream;
     } else if (isRemote) {
-      videoTrackSubjectSubscriber = client.videoTrackSubject.subscribe(
-        (videoTrack) => {
-          console.log("client.videoTrackSubject", videoTrack);
-          if (videoRef.current.srcObject == null) {
-            videoRef.current.srcObject = new MediaStream();
-          }
-          if (videoTrack != null) {
-            videoRef.current.srcObject.addTrack(videoTrack);
-          }
-        }
-      );
-      audioTrackSubjectSubscriber = client.audioTrackSubject.subscribe(
-        (audioTrack) => {
-          console.log("client.audioTrackSubject", audioTrack);
-          if (videoRef.current.srcObject == null) {
-            videoRef.current.srcObject = new MediaStream();
-          }
-          if (audioTrack != null) {
-            videoRef.current.srcObject.addTrack(audioTrack);
-          }
-        }
-      );
+      // videoTrackSubjectSubscriber = client.videoTrackSubject.subscribe(
+      //   (videoTrack) => {
+      //     console.log("client.videoTrackSubject", videoTrack);
+      //     if (videoRef.current.srcObject == null) {
+      //       videoRef.current.srcObject = new MediaStream();
+      //     }
+      //     if (videoTrack != null) {
+      //       videoRef.current.srcObject.addTrack(videoTrack);
+      //     }
+      //   }
+      // );
+      // audioTrackSubjectSubscriber = client.audioTrackSubject.subscribe(
+      //   (audioTrack) => {
+      //     console.log("client.audioTrackSubject", audioTrack);
+      //     if (videoRef.current.srcObject == null) {
+      //       videoRef.current.srcObject = new MediaStream();
+      //     }
+      //     if (audioTrack != null) {
+      //       videoRef.current.srcObject.addTrack(audioTrack);
+      //     }
+      //   }
+      // );
     }
 
     return () => {
-      videoTrackSubjectSubscriber?.unsubscribe();
-      audioTrackSubjectSubscriber?.unsubscribe();
+      // videoTrackSubjectSubscriber?.unsubscribe();
+      // audioTrackSubjectSubscriber?.unsubscribe();
     };
-  }, [
-    isLocal,
-    isRemote,
-    localMediaStream,
-    client.videoTrackSubject,
-    client.audioTrackSubject,
-  ]);
+  }, [isLocal, isRemote, localMediaStream]);
 
   return (
     <div
@@ -60,7 +56,7 @@ export default function ClientBox(props) {
       })}
     >
       <div>
-        <code>{`(${client.connectionRole}, ${client.peerConnectionRole}) ${clientId}`}</code>
+        <code>{`() ${clientId}`}</code>
       </div>
       <video
         ref={videoRef}

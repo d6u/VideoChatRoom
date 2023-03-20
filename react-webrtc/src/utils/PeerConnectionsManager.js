@@ -1,4 +1,12 @@
-import { BehaviorSubject, Subject } from "rxjs";
+import {
+  BehaviorSubject,
+  combineLatest,
+  combineLatestWith,
+  pairwise,
+  Subject,
+  map,
+  scan,
+} from "rxjs";
 import { Record, Set, Map, List } from "immutable";
 import PeerConnectionManager from "./PeerConnectionManager";
 
@@ -32,11 +40,78 @@ export default class PeerConnectionsManager extends EventTarget {
   answerSubject = new Subject();
   iceSubject = new Subject();
 
+  currentClientIdSubject = new BehaviorSubject(null);
+  clientIdsSubject = new BehaviorSubject(Set());
+
+  incomingMessagesSubject = new Subject();
+  outgoingMessagesSubject = new Subject();
+
   constructor(localMediaStreamSubject) {
     super();
     this.localMediaStreamSubject = localMediaStreamSubject;
     this.addEventListener("data", this.handleData);
     this.addEventListener("connectclient", this.handleConnectClient);
+
+    this.clientIdsSubject
+      .pipe(
+        pairwise(),
+        combineLatestWith(this.currentClientIdSubject),
+        scan((clients, [[prevClientIds, currClientIds], currentClientId]) => {
+          log("--> ", clients.toJS());
+
+          const joinClientIds = currClientIds.subtract(prevClientIds);
+          const leftClientIds = prevClientIds.subtract(currClientIds);
+
+          log("==>", {
+            joinClientIds: joinClientIds.toJS(),
+            leftClientIds: leftClientIds.toJS(),
+          });
+
+          leftClientIds.forEach((id) => {
+            clients.getIn([id, "peerConnectionManager"])?.destroy();
+            clients.getIn([id, "localMediaStreamSubsriber"])?.unsubscribe();
+            clients = clients.delete(id);
+          });
+
+          joinClientIds.forEach((id) => {
+            clients = clients.set(
+              id,
+              Client({
+                videoTrackSubject: new Subject(),
+                audioTrackSubject: new Subject(),
+              })
+            );
+          });
+
+          currClientIds.forEach((id) => {
+            clients = clients.setIn(
+              [id, "connectionRole"],
+              currentClientId == null
+                ? "UNKNOWN"
+                : id === currentClientId
+                ? "LOCAL"
+                : "REMOTE"
+            );
+
+            if (
+              clients.setIn([id, "connectionRole"]) === "REMOTE" &&
+              !clients.hasIn([id, "localRandomValue"])
+            ) {
+              const value = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
+              clients = clients.setIn([id, "localRandomValue"], value);
+              this.outgoingMessagesSubject.next({
+                clientId: id,
+                randomValue: value,
+              });
+            }
+          });
+
+          return clients;
+        }, Map())
+      )
+      .subscribe((a) => log("+++ ", a.toJS()));
+
+    // this.incomingMessagesSubject.subscribe(this.handleConnectClient);
   }
 
   destroy() {
@@ -47,12 +122,14 @@ export default class PeerConnectionsManager extends EventTarget {
 
   setCurrentClientId(currentClientId) {
     this.currentClientId = currentClientId;
+    this.currentClientIdSubject.next(currentClientId);
     this.dispatchEvent(new Event("data"));
   }
 
   setClientIds(clientIds) {
     this.oldClientIds = this.clientIds;
     this.clientIds = Set(clientIds);
+    this.clientIdsSubject.next(clientIds);
     this.dispatchEvent(new Event("data"));
   }
 

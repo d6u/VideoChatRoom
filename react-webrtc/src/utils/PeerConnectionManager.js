@@ -1,4 +1,10 @@
-import { combineLatestWith, Subject } from "rxjs";
+import {
+  concatWith,
+  ReplaySubject,
+  Subject,
+  fromEvent,
+  BehaviorSubject,
+} from "rxjs";
 
 const WEBRTC_CONFIG = {
   iceServers: [
@@ -27,92 +33,79 @@ function logError(...args) {
 
 export default class PeerConnectionManager extends EventTarget {
   isStopped = false;
-  iceCandidatesSubject = new Subject();
+  subscriptions = [];
+  remoteIceCandidatesSubject = new ReplaySubject();
   remoteDescriptionSetSubject = new Subject();
+  // offerSubject = new Subject();
+  // answerSubject = new Subject();
+  // tracksSubject = new Subject();
 
   constructor(remoteClientId) {
-    log(`Creating PeerConnectionManager(${remoteClientId})`);
     super();
     this.remoteClientId = remoteClientId;
+    this.log(`PeerConnectionManager()`);
+  }
+
+  log(...args) {
+    log(`${this.remoteClientId}`, ...args);
+  }
+
+  destroy() {
+    this.isStopped = true;
+
+    this.pc?.close();
+    this.pc = null;
+
+    for (const subscription of this.subscriptions) {
+      subscription.unsubscribe();
+    }
   }
 
   createConnection() {
-    log("Creating connection.");
+    this.log("Creating connection.");
 
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
-    this.pc.onsignalingstatechange = (event) => {
-      if (this.isStopped) {
-        return;
-      }
-      log(
-        `${this.remoteClientId} | onsignalingstatechange: ${this.pc.signalingState}`
-      );
-    };
-
-    this.pc.onconnectionstatechange = (event) => {
-      if (this.isStopped) {
-        return;
-      }
-      log(
-        `${this.remoteClientId} | onconnectionstatechange ${this.pc.connectionState}`
-      );
-      switch (this.pc.connectionState) {
-        case "failed":
-          this.dispatchEvent(new Event("failed"));
-          break;
-        default:
-          break;
-      }
-    };
-
-    this.pc.onicegatheringstatechange = (event) => {
-      if (this.isStopped) {
-        return;
-      }
-      log(
-        `${this.remoteClientId} | onicegatheringstatechange ${this.pc.iceGatheringState}`
-      );
-    };
-
-    this.pc.oniceconnectionstatechange = (event) => {
-      if (this.isStopped) {
-        return;
-      }
-      log(
-        `${this.remoteClientId} | oniceconnectionstatechange ${this.pc.iceConnectionState}`
-      );
-    };
-
-    this.pc.ontrack = (event) => {
-      if (this.isStopped) {
-        return;
-      }
-      log(
-        `${this.remoteClientId} | ontrack: ${event.track.kind}, ${event.track.id}`
-      );
-      this.dispatchEvent(new CustomEvent("track", { detail: event.track }));
-    };
-
-    this.pc.onicecandidate = (event) => {
-      if (this.isStopped) {
-        return;
-      }
-      if (!event.candidate) {
-        log(`${this.remoteClientId} | No more ICE candidate.`);
-        return;
-      }
-      log(`${this.remoteClientId} | onicecandidate.`);
-      this.dispatchEvent(
-        new CustomEvent("icecandidate", { detail: event.candidate })
-      );
-    };
-
-    this.iceCandidatesSubject
-      .pipe(combineLatestWith(this.remoteDescriptionSetSubject))
-      .subscribe(([iceCandidate]) => {
-        this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
-      });
+    this.subscriptions.push(
+      fromEvent(this.pc, "signalingstatechange").subscribe(() => {
+        this.log(`signalingstatechange: ${this.pc.signalingState}`);
+      }),
+      fromEvent(this.pc, "icegatheringstatechange").subscribe(() => {
+        this.log(`onicegatheringstatechange: ${this.pc.iceGatheringState}`);
+      }),
+      fromEvent(this.pc, "iceconnectionstatechange").subscribe(() => {
+        this.log(`oniceconnectionstatechange: ${this.pc.iceConnectionState}`);
+      }),
+      fromEvent(this.pc, "connectionstatechange").subscribe(() => {
+        this.log(`onconnectionstatechange: ${this.pc.connectionState}`);
+        switch (this.pc.connectionState) {
+          case "failed":
+            this.dispatchEvent(new Event("failed"));
+            break;
+          default:
+            break;
+        }
+      }),
+      fromEvent(this.pc, "track").subscribe((event) => {
+        this.log(`ontrack: ${event.track.kind}, ${event.track.id}`);
+        this.dispatchEvent(new CustomEvent("track", { detail: event.track }));
+      }),
+      fromEvent(this.pc, "icecandidate").subscribe((event) => {
+        if (event.candidate == null) {
+          this.log(`No more ICE candidates.`);
+        } else {
+          this.log("onicecandidate:", event.candidate);
+          this.dispatchEvent(
+            new CustomEvent("icecandidate", { detail: event.candidate })
+          );
+        }
+      }),
+      this.remoteDescriptionSetSubject
+        .pipe(concatWith(this.remoteIceCandidatesSubject))
+        .subscribe((iceCandidate) => {
+          this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+        })
+    );
   }
 
   async createOffer() {
@@ -129,7 +122,7 @@ export default class PeerConnectionManager extends EventTarget {
 
   async setOfferAndCreateAnswer(offer) {
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
-    this.remoteDescriptionSetSubject.next();
+    this.remoteDescriptionSetSubject.complete();
     if (this.isStopped) {
       return null;
     }
@@ -149,29 +142,14 @@ export default class PeerConnectionManager extends EventTarget {
       return;
     }
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
-    this.remoteDescriptionSetSubject.next();
+    this.remoteDescriptionSetSubject.complete();
   }
 
   addIceCandidate(iceCandidate) {
-    this.iceCandidatesSubject.next(iceCandidate);
+    this.remoteIceCandidatesSubject.next(iceCandidate);
   }
 
   addTrack(track, stream) {
     this.pc.addTrack(track, stream);
-  }
-
-  destroy() {
-    this.isStopped = true;
-
-    if (this.pc != null) {
-      this.pc.close();
-      this.pc.onsignalingstatechange = null;
-      this.pc.onconnectionstatechange = null;
-      this.pc.onicegatheringstatechange = null;
-      this.pc.oniceconnectionstatechange = null;
-      this.pc.ontrack = null;
-      this.pc.onicecandidate = null;
-      this.pc = null;
-    }
   }
 }

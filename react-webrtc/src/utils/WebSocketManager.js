@@ -1,69 +1,73 @@
-import { Subject } from "rxjs";
+import { nanoid } from "nanoid";
+import { Subject, tap } from "rxjs";
 import { webSocket } from "rxjs/webSocket";
+
 import endpoints from "../api_endpoints.json";
 
-function log(...args) {
-  console.debug("%cWebSocketManager", "background: lightgreen", ...args);
-}
-
-function logError(...args) {
-  console.error("%cWebSocketManager", "background: lightgreen", ...args);
-}
-
 export default class WebSocketManager {
-  webSocketSubject = null;
   subscription = null;
   openObserver = new Subject();
   closeObserver = new Subject();
-  messageObserver = new Subject();
 
-  connect() {
+  constructor() {
+    this.instanceId = nanoid();
+    this.log("ctor()");
     this.webSocketSubject = webSocket({
       url: endpoints.websocket_endpoint_url,
       deserializer: (event) => {
         try {
           return JSON.parse(event.data);
         } catch (error) {
-          logError("JSON parse error.", event.data);
+          this.logError("JSON parse error.", event.data);
           return {};
         }
       },
       openObserver: {
         next: (data) => {
-          log("onopen", data);
+          this.log("onopen", data);
           this.openObserver.next();
         },
       },
       closeObserver: {
         next: (event) => {
           // More detail in https://www.rfc-editor.org/rfc/rfc6455#section-11.7
-          log("onclose", event.code);
+          this.log("onclose", event.code);
           this.closeObserver.next();
         },
       },
     });
 
-    this.subscription = this.webSocketSubject.subscribe({
-      next: (data) => {
-        log("onmessage", data);
-        this.messageObserver.next(data);
-      },
-      error: (error) => {
-        // There is no error detail for WebSocket errors.
-        logError("onerror", error);
-      },
-    });
+    this.webSocketObservable = this.webSocketSubject.pipe(
+      tap({
+        next: (data) => {
+          this.log("onmessage", data);
+        },
+        error: (error) => {
+          // There is no error detail for WebSocket errors.
+          this.logError("onerror", error);
+        },
+      })
+    );
   }
 
-  close() {
-    this.webSocketSubject?.complete();
+  log(...args) {
+    console.debug(
+      `%cWebSocketManager [${this.instanceId}]`,
+      "background: lightgreen",
+      ...args
+    );
+  }
+
+  logError(...args) {
+    console.error(
+      `%cWebSocketManager [${this.instanceId}]`,
+      "background: lightgreen",
+      ...args
+    );
   }
 
   send(data) {
-    if (this.webSocketSubject == null) {
-      throw new Error("WebSocket is not created yet.");
-    }
-    log("sending message", JSON.stringify(data));
+    this.log("sending message", JSON.stringify(data));
     this.webSocketSubject.next(data);
   }
 }
