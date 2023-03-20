@@ -553,18 +553,6 @@ Resources:
       ApiId: !Ref ApiGatewayApiWebSocket
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionConnectClient.Arn}/invocations
-  ApiGatewayIntegrationResponseConnectClient:
-    Type: AWS::ApiGatewayV2::IntegrationResponse
-    Properties:
-      ApiId: !Ref ApiGatewayApiWebSocket
-      IntegrationId: !Ref ApiGatewayIntegrationConnectClient
-      IntegrationResponseKey: $default
-  ApiGatewayRouteResponseConnectClient:
-    Type: AWS::ApiGatewayV2::RouteResponse
-    Properties:
-      ApiId: !Ref ApiGatewayApiWebSocket
-      RouteId: !Ref ApiGatewayRouteConnectClient
-      RouteResponseKey: $default
   LambdaFunctionConnectClient:
     Type: AWS::Lambda::Function
     Properties:
