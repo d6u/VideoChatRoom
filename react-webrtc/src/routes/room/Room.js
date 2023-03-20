@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Set } from "immutable";
-import { from, BehaviorSubject, filter } from "rxjs";
+import { from, filter } from "rxjs";
 import WebSocketManager from "../../utils/WebSocketManager";
 import RoomStateSyncManager from "../../utils/RoomStateSyncManager";
 import ClientBox from "./ClientBox";
 
 export default function Room({ roomId }) {
-  const refLocalMediaStreamSubject = useRef(new BehaviorSubject(null));
   const refWs = useRef(null);
 
   const [wsStatus, setWsStatus] = useState("Disconnected");
@@ -34,10 +33,9 @@ export default function Room({ roomId }) {
     );
 
     subscriptions.push(
-      roomStateSyncManager.snapshotsObservable.subscribe((snapshot) => {
-        console.log("-->", snapshot.toJS());
-        setClientIds(snapshot.clientIds);
-      })
+      roomStateSyncManager.snapshotsObservable.subscribe((snapshot) =>
+        setClientIds(snapshot.clientIds)
+      )
     );
 
     subscriptions.push(
@@ -87,7 +85,6 @@ export default function Room({ roomId }) {
         next: (mediaStream) => {
           mediaStreamTmp = mediaStream;
           setLocalMediaStream(mediaStream);
-          refLocalMediaStreamSubject.current.next(mediaStream);
         },
         error: (err) => {
           console.warn("Getting user media failed.", err);
@@ -102,13 +99,12 @@ export default function Room({ roomId }) {
 
       mediaStreamTmp?.getTracks().forEach((track) => track.stop());
       setLocalMediaStream(null);
-      refLocalMediaStreamSubject.current.next(null);
     };
   }, []);
 
   const onWsMessage = useCallback((message) => {
     refWs.current.send(message);
-  });
+  }, []);
 
   return (
     <div>

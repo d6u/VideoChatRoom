@@ -178,7 +178,7 @@ function ClientBoxRemote({
 
       clearTimeout(timeoutHandler);
     };
-  }, [clientId, wsMessageObserver]);
+  }, [clientId, wsMessageObserver, onWsMessage]);
 
   return (
     <div className={classNames({ "Room_single-video-container": true })}>
