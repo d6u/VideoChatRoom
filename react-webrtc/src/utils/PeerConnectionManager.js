@@ -1,10 +1,4 @@
-import {
-  concatWith,
-  ReplaySubject,
-  Subject,
-  fromEvent,
-  BehaviorSubject,
-} from "rxjs";
+import { concatWith, ReplaySubject, Subject, fromEvent, tap } from "rxjs";
 
 const WEBRTC_CONFIG = {
   iceServers: [
@@ -15,54 +9,51 @@ const WEBRTC_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
-function log(...args) {
-  console.log(
-    "%cPeerConnectionManager",
-    "background: blue; color: white",
-    ...args
-  );
-}
-
-function logError(...args) {
-  console.error(
-    "%cPeerConnectionManager",
-    "background: blue; color: white",
-    ...args
-  );
-}
-
 export default class PeerConnectionManager extends EventTarget {
   isStopped = false;
   subscriptions = [];
   remoteIceCandidatesSubject = new ReplaySubject();
   remoteDescriptionSetSubject = new Subject();
-  // offerSubject = new Subject();
-  // answerSubject = new Subject();
-  // tracksSubject = new Subject();
+  localIceCandidatesSubject = new Subject();
+  tracksSubject = new Subject();
 
   constructor(remoteClientId) {
     super();
+    this.log(`constructor()`);
     this.remoteClientId = remoteClientId;
-    this.log(`PeerConnectionManager()`);
   }
 
   log(...args) {
-    log(`${this.remoteClientId}`, ...args);
+    console.log(
+      "%cPeerConnectionManager",
+      "background: blue; color: white",
+      ...args
+    );
+  }
+
+  logError(...args) {
+    console.error(
+      "%cPeerConnectionManager",
+      "background: blue; color: white",
+      ...args
+    );
   }
 
   destroy() {
-    this.isStopped = true;
+    this.log(`destroy()`);
 
-    this.pc?.close();
-    this.pc = null;
+    this.isStopped = true;
 
     for (const subscription of this.subscriptions) {
       subscription.unsubscribe();
     }
+
+    this.pc?.close();
+    this.pc = null;
   }
 
   createConnection() {
-    this.log("Creating connection.");
+    this.log("creating peer connection.");
 
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
@@ -80,7 +71,6 @@ export default class PeerConnectionManager extends EventTarget {
         this.log(`onconnectionstatechange: ${this.pc.connectionState}`);
         switch (this.pc.connectionState) {
           case "failed":
-            this.dispatchEvent(new Event("failed"));
             break;
           default:
             break;
@@ -88,20 +78,22 @@ export default class PeerConnectionManager extends EventTarget {
       }),
       fromEvent(this.pc, "track").subscribe((event) => {
         this.log(`ontrack: ${event.track.kind}, ${event.track.id}`);
-        this.dispatchEvent(new CustomEvent("track", { detail: event.track }));
+        this.tracksSubject.next(event.track);
       }),
       fromEvent(this.pc, "icecandidate").subscribe((event) => {
         if (event.candidate == null) {
-          this.log(`No more ICE candidates.`);
+          this.log(`no more ICE candidates`);
+          this.localIceCandidatesSubject.complete();
         } else {
           this.log("onicecandidate:", event.candidate);
-          this.dispatchEvent(
-            new CustomEvent("icecandidate", { detail: event.candidate })
-          );
+          this.localIceCandidatesSubject.next(event.candidate);
         }
       }),
       this.remoteDescriptionSetSubject
-        .pipe(concatWith(this.remoteIceCandidatesSubject))
+        .pipe(
+          concatWith(this.remoteIceCandidatesSubject),
+          tap(() => this.log("receive remote ice candidate"))
+        )
         .subscribe((iceCandidate) => {
           this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
         })

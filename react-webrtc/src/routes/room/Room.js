@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Set } from "immutable";
 import { from, BehaviorSubject, filter } from "rxjs";
 import WebSocketManager from "../../utils/WebSocketManager";
@@ -7,11 +7,13 @@ import ClientBox from "./ClientBox";
 
 export default function Room({ roomId }) {
   const refLocalMediaStreamSubject = useRef(new BehaviorSubject(null));
+  const refWs = useRef(null);
 
   const [wsStatus, setWsStatus] = useState("Disconnected");
   const [localClientId, setCurrentClientId] = useState(null);
   const [localMediaStream, setLocalMediaStream] = useState(null);
   const [clientIds, setClientIds] = useState(Set());
+  const [wsMessageObserver, setWsMessageObserver] = useState(null);
 
   useEffect(() => {
     console.group("Room");
@@ -23,6 +25,9 @@ export default function Room({ roomId }) {
     setWsStatus("Connecting");
 
     const ws = new WebSocketManager();
+    refWs.current = ws;
+    setWsMessageObserver(ws.webSocketObservable);
+
     const roomStateSyncManager = new RoomStateSyncManager(
       roomId,
       ws.webSocketObservable
@@ -53,16 +58,6 @@ export default function Room({ roomId }) {
         .pipe(filter((m) => !m.isDelta && m.type === "CurrentClientId"))
         .subscribe(({ clientId }) => setCurrentClientId(clientId))
     );
-
-    //       case "ConnectClient": {
-    //         const { fromClientId, messageData } = data;
-    //         pcsm.dispatchEvent(
-    //           new CustomEvent("connectclient", {
-    //             detail: { fromClientId, messageData },
-    //           })
-    //         );
-    //         break;
-    //       }
 
     console.groupEnd();
     return () => {
@@ -111,6 +106,10 @@ export default function Room({ roomId }) {
     };
   }, []);
 
+  const onWsMessage = useCallback((message) => {
+    refWs.current.send(message);
+  });
+
   return (
     <div>
       <h1>
@@ -127,6 +126,8 @@ export default function Room({ roomId }) {
               clientId={id}
               localMediaStream={localMediaStream}
               localClientId={localClientId}
+              wsMessageObserver={wsMessageObserver}
+              onWsMessage={onWsMessage}
             />
           ))
           .toArray()}

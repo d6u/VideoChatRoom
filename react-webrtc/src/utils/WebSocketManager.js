@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { Subject, tap } from "rxjs";
+import { share, Subject, tap } from "rxjs";
 import { webSocket } from "rxjs/webSocket";
 
 import endpoints from "../api_endpoints.json";
@@ -46,7 +46,8 @@ export default class WebSocketManager {
           // There is no error detail for WebSocket errors.
           this.logError("onerror", error);
         },
-      })
+      }),
+      share()
     );
   }
 
