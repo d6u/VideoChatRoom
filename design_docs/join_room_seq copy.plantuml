@@ -1,0 +1,118 @@
+@startuml Gameroom
+
+!procedure $queue_subscriber($seq, $is_client_online = false)
+  group #LightBlue Process Message(seq: $seq)
+    SQS -> Lambda++ : Process Message(seq: $seq)
+    Lambda -> DB : Update RoomSnapshot(seq: $seq)
+    note over DB
+      !$i = 0
+      !while $i <= $seq
+      Delta(seq: $i)
+      !$i = $i + 1
+      !endwhile
+      RoomSnapshot(seq: $seq)
+    end note
+    Lambda -> DB++ : Query connections for room
+    return
+    [<- Lambda : Broadcast Delta(seq: $seq)
+    !if ($is_client_online != false)
+      ClientA <[#red]- Lambda : Broadcast Delta(seq: $seq)
+    !endif
+    return
+  end
+!endprocedure
+
+participant ClientA
+participant API
+participant SQS
+' participant Lambda
+participant DB
+
+note over DB
+  Delta(seq: 0)
+  RoomSnapshot(seq: 0)
+end note
+
+note over DB
+  Connections: []
+end note
+
+ClientA -> API++ : GET /rooms/:id
+API -> DB++ : GetItem(RoomsTable)
+return RoomSnapshot(seq: 0)
+ClientA <[#red]-- API-- : RoomSnapshot(seq: 0)
+
+note over ClientA : RoomSnapshot(seq: 0)
+
+[-> SQS : Message(seq: 1)
+[-> SQS : Message(seq: 2)
+
+note over SQS: Messages: [Message1, Message2]
+
+$queue_subscriber(1)
+
+note over SQS: Messages: [Message2]
+
+ClientA -> API++ : $connect
+ClientA <[#red]-- API-- : 200
+
+ClientA -> API++ : Message(action: JoinRoom)
+API -> DB : UpdateItem(RoomsTable, {roomId, Set(connectionId)})
+
+note over DB : Connections: [ClientA]
+
+$queue_subscriber(2)
+
+note over SQS
+  Messages: []
+end note
+
+API -> SQS : Message(seq: 3, type: JoinRoom)
+deactivate API
+
+note over SQS : Messages: [Message3]
+
+$queue_subscriber(3, true)
+
+note over SQS : Messages: []
+
+note over ClientA
+  Delta(seq: 3)
+  RoomSnapshot(seq: 0)
+end note
+/ note over Lambda
+  Broadcast to ClientA as well since
+  it already add itself to room.
+end note
+
+ClientA -> API++ : GET /room_deltas/[:id] (1-3)
+API -> DB++
+return Delta(seq: 1-3)
+ClientA <[#red]-- API-- : Delta(seq: 1-3)
+
+note over ClientA
+  RoomSnapshot(seq: 0)
+  Delta(seq: 1)
+  Delta(seq: 2)
+  Delta(seq: 3)
+end note
+
+ClientA -> ClientA
+
+note over ClientA
+  RoomSnapshot(seq: 3)
+end note
+
+[-> SQS : Message(seq: 4)
+
+note over SQS : Messages: [Message4]
+
+$queue_subscriber(4, true)
+
+note over SQS : Messages: []
+
+note over ClientA
+  RoomSnapshot(seq: 4)
+end note
+
+@enduml

@@ -17,7 +17,6 @@ export default function Room({ roomId }) {
   useEffect(() => {
     console.group("Room");
     console.group("Room setup");
-    console.log(`useEffect(). roomId = ${roomId}`);
 
     const subscriptions = [];
 
@@ -60,7 +59,6 @@ export default function Room({ roomId }) {
     console.groupEnd();
     return () => {
       console.group("Room cleanup");
-      console.log(`useEffect() clean up. roomId = ${roomId}`);
 
       for (const subscription of subscriptions) {
         subscription.unsubscribe();
