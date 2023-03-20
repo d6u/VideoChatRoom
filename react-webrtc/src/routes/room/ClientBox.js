@@ -93,6 +93,7 @@ function ClientBoxRemote({
 
     const randomValue = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
 
+    // Defer executing this to avoid thrashing this useEffect()
     const timeoutHandler = setTimeout(() => {
       onWsMessage({
         action: "ConnectClient",
@@ -145,20 +146,20 @@ function ClientBoxRemote({
                 );
               } else {
                 setPeerConnectionRole("ANSWER");
+
+                subscriptions.push(
+                  refPcm.current.answerSubject.subscribe((answer) =>
+                    onWsMessage({
+                      action: "ConnectClient",
+                      targetClientId: clientId,
+                      messageData: answer,
+                    })
+                  )
+                );
               }
               break;
             case "offer":
-              subscriptions.push(
-                from(
-                  refPcm.current.setOfferAndCreateAnswer(messageData)
-                ).subscribe((answer) =>
-                  onWsMessage({
-                    action: "ConnectClient",
-                    targetClientId: clientId,
-                    messageData: answer,
-                  })
-                )
-              );
+              refPcm.current.setOffer(messageData);
               break;
             case "answer":
               refPcm.current.setAnswer(messageData);

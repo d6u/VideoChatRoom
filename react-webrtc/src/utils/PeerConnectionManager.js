@@ -15,6 +15,7 @@ export default class PeerConnectionManager extends EventTarget {
   remoteIceCandidatesSubject = new ReplaySubject();
   remoteDescriptionSetSubject = new Subject();
   localIceCandidatesSubject = new Subject();
+  answerSubject = new Subject();
   tracksSubject = new Subject();
 
   constructor(remoteClientId) {
@@ -112,27 +113,25 @@ export default class PeerConnectionManager extends EventTarget {
     return offer;
   }
 
-  async setOfferAndCreateAnswer(offer) {
+  async setOffer(offer) {
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
-    this.remoteDescriptionSetSubject.complete();
     if (this.isStopped) {
-      return null;
+      return;
     }
+    this.remoteDescriptionSetSubject.complete();
     const answer = await this.pc.createAnswer();
     if (this.isStopped) {
-      return null;
+      return;
     }
     await this.pc.setLocalDescription(answer);
     if (this.isStopped) {
-      return null;
+      return;
     }
-    return answer;
+    this.answerSubject.next(answer);
+    this.answerSubject.complete();
   }
 
   async setAnswer(answer) {
-    if (this.pc.currentRemoteDescription != null) {
-      return;
-    }
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
     this.remoteDescriptionSetSubject.complete();
   }
