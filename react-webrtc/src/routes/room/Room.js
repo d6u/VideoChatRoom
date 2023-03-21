@@ -81,6 +81,7 @@ export default function Room({ roomId }) {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       ).subscribe({
         next: (mediaStream) => {
+          console.log("Getting user media succeeded.", mediaStream);
           mediaStreamTmp = mediaStream;
           setLocalMediaStream(mediaStream);
         },

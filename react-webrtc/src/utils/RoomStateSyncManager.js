@@ -8,6 +8,7 @@ import {
   map,
   mergeMap,
   scan,
+  share,
   skip,
   Subject,
   tap,
@@ -82,7 +83,24 @@ export default class RoomStateSyncManager {
                 .sortBy((d) => d.seq)
                 .filter((d) => d.seq > snapshot.seq);
               if (deltas.getIn([0, "seq"]) - snapshot.seq > 1) {
-                this.log("there are gaps in delta and snapshot");
+                this.log(
+                  `there are gaps in delta and snapshot, fetching deltas between ${
+                    snapshot.seq + 1
+                  } and ${deltas.getIn([0, "seq"]) - 1}`
+                );
+
+                this.subscriptions.push(
+                  from(
+                    getRoomDeltas(
+                      roomId,
+                      snapshot.seq + 1,
+                      deltas.getIn([0, "seq"]) - 1
+                    )
+                  )
+                    .pipe(mergeMap((fetchedDeltas) => from(fetchedDeltas)))
+                    .subscribe(rawDeltasSubject)
+                );
+
                 return { stagedDeltas: deltas, toBeProcessedDeltas };
               } else {
                 return {
@@ -129,7 +147,7 @@ export default class RoomStateSyncManager {
         .subscribe(snapshotsSubject)
     );
 
-    this.snapshotsObservable = snapshotsSubject.pipe(skip(1));
+    this.snapshotsObservable = snapshotsSubject.pipe(share());
   }
 
   log(...args) {
