@@ -153,6 +153,13 @@ Resources:
           - DomainName: !Join [".", [!Ref S3BucketFrontEnd, "s3.amazonaws.com"]]
             Id: S3BucketOrigin
             S3OriginConfig: {}
+        # Provide a fallback for urls like "/:roomId", because we are hosting
+        # a static website, it won't be able to serve assets for dynamic paths.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponsePagePath: /index.html
+            ResponseCode: 200
+            ErrorCachingMinTTL: 0
 
   # --- DynamoDB ---
   DynamoDbTableRoomSnapshots:
