@@ -35,4 +35,8 @@ export async function handler(event, context) {
   } catch (error) {
     console.error(`Error posting to client ${targetClientId}.`, error);
   }
+
+  return {
+    statusCode: 200,
+  };
 }

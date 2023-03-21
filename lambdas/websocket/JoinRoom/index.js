@@ -1,7 +1,12 @@
-import { getDynamoDbClient, getSqsClient } from "shared-utils";
+import {
+  getDynamoDbClient,
+  getSqsClient,
+  getApiGatewayManagement,
+} from "shared-utils";
 import { addClientToRoom } from "shared-utils/room-to-clients-utils.js";
 import { sendActionToRoomActionsQueue } from "shared-utils/sqs-utils.js";
 import { createClientToRoomPair } from "shared-utils/client-to-room-utils.js";
+import { postToClient } from "shared-utils/api-gateway-management-utils.js";
 
 const ERROR_TYPES = {
   RoomNotFoundError: "RoomNotFoundError",
@@ -13,6 +18,9 @@ const ERROR_TYPES = {
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
 const sqsClient = getSqsClient(process.env.AWS_REGION);
+const apiGatewayManagementApi = getApiGatewayManagement(
+  process.env.WEBSOCKET_API_ENDPOINT.replace("wss:", "https:")
+);
 
 function parseEvent(event) {
   const {
@@ -31,6 +39,20 @@ export async function handler(event, context) {
   console.log("Receiving event", event);
 
   const { requestId, connectionId, roomId } = parseEvent(event);
+
+  // Return current connection ID as client ID to the current WebSocket client.
+
+  postToClient(apiGatewayManagementApi, connectionId, {
+    isDelta: false,
+    type: "CurrentClientId",
+    clientId: connectionId,
+  }).catch((error) => {
+    if (error["$metadata"]?.httpStatusCode === 410) {
+      console.warn(`found stale connection ${connectionId}`);
+    } else {
+      console.error(`posting to connection ${connectionId} failed`, error);
+    }
+  });
 
   // === Add connection ID to room to client map ===
 
@@ -102,10 +124,5 @@ export async function handler(event, context) {
 
   return {
     statusCode: 200,
-    body: JSON.stringify({
-      isDelta: false,
-      type: "CurrentClientId",
-      clientId: connectionId,
-    }),
   };
 }

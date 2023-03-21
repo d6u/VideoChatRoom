@@ -4,6 +4,7 @@ import {
   applyClientJoinAction,
   applyClientLeftAction,
 } from "shared-utils/room-snapshots-utils.js";
+import { postToClient } from "shared-utils/api-gateway-management-utils.js";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
 const apiGatewayManagementApi = getApiGatewayManagement(
@@ -54,16 +55,12 @@ async function handleClientJoinAction(body) {
         dynamoDbClient,
         roomId
       );
-      await postToClients(
-        clientIds,
-        roomId,
-        JSON.stringify({
-          isDelta: true,
-          type: "ClientJoin",
-          seq,
-          clientId,
-        })
-      );
+      await postToClients(clientIds, roomId, {
+        isDelta: true,
+        type: "ClientJoin",
+        seq,
+        clientId,
+      });
     }
   } catch (error) {
     console.error("Something went wrong.", error);
@@ -79,16 +76,12 @@ async function handleClientLeftAction(body) {
         dynamoDbClient,
         roomId
       );
-      await postToClients(
-        clientIds,
-        roomId,
-        JSON.stringify({
-          isDelta: true,
-          type: "ClientLeft",
-          seq,
-          clientId,
-        })
-      );
+      await postToClients(clientIds, roomId, {
+        isDelta: true,
+        type: "ClientLeft",
+        seq,
+        clientId,
+      });
     }
   } catch (error) {
     console.error("Something went wrong.", error);
@@ -115,32 +108,12 @@ async function getClientIdsForBroadcasting(dynamoDbClient, roomId) {
 async function postToClients(clientIds, roomId, data) {
   const postToConnectionCalls = clientIds.map(async (connectionId) => {
     try {
-      await apiGatewayManagementApi.postToConnection({
-        ConnectionId: connectionId,
-        Data: data,
-      });
-    } catch (err) {
-      if (err["$metadata"] != null && err["$metadata"].httpStatusCode === 410) {
-        console.log(`Found stale connection, deleting "${connectionId}."`);
-
-        try {
-          await dynamoDbClient.send(
-            new UpdateItemCommand({
-              TableName: process.env.ROOMS_TABLE_NAME,
-              Key: {
-                roomId: { S: roomId },
-              },
-              UpdateExpression: "DELETE clients :vals",
-              ExpressionAttributeValues: {
-                ":vals": { SS: [connectionId] },
-              },
-            })
-          );
-        } catch (err) {
-          console.error(`Deleting "${connectionId}" from room failed.`, err);
-        }
+      await postToClient(apiGatewayManagementApi, connectionId, data);
+    } catch (error) {
+      if (error["$metadata"]?.httpStatusCode === 410) {
+        console.warn(`found stale connection ${connectionId}`);
       } else {
-        console.error(`Posting to connection "${connectionId}" failed.`, err);
+        console.error(`posting to connection ${connectionId} failed`, error);
       }
     }
   });

@@ -89,7 +89,6 @@ Resources:
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionJoinRoom}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnectClient}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionRoomAction}:*
-              - !GetAtt LogsLogGroupHttpApiAccessLog.Arn
   IamPolicyLambdaInteractSqs:
     Type: AWS::IAM::Policy
     Properties:
@@ -168,6 +167,11 @@ Resources:
     Properties:
       LogGroupName: !Sub ${AWS::StackName}HttpApiAccessLog
       RetentionInDays: 30
+  LogsLogGroupWebSocketApiAccessLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ${AWS::StackName}WebSocketApiAccessLog
+      RetentionInDays: 30
 
   # --- HTTP APIs ---
   ApiGatewayApiHttp:
@@ -191,10 +195,7 @@ Resources:
       AccessLogSettings:
         DestinationArn: !GetAtt LogsLogGroupHttpApiAccessLog.Arn
         Format: >
-          {"requestId":"$context.requestId", "ip": "$context.identity.sourceIp",
-          "caller":"$context.identity.caller",
-          "user":"$context.identity.user","requestTime":"$context.requestTime","routeKey":"$context.routeKey",
-          "status":"$context.status"}
+          {"requestId": "$context.requestId", "ip": "$context.identity.sourceIp", "caller": "$context.identity.caller", "user": "$context.identity.user", "requestTime": "$context.requestTime", "routeKey": "$context.routeKey", "status": "$context.status"}
 
   # --- HTTP APIs route: POST /rooms ---
   ApiGatewayRouteCreateRoom:
@@ -350,6 +351,10 @@ Resources:
         DataTraceEnabled: true
         DetailedMetricsEnabled: true
         LoggingLevel: INFO
+      AccessLogSettings:
+        DestinationArn: !GetAtt LogsLogGroupWebSocketApiAccessLog.Arn
+        Format: >
+          {"stage": "$context.stage", "request_id": "$context.requestId", "api_id": "$context.apiId", "resource_path": "$context.resourcePath", "resource_id": "$context.resourceId", "http_method": "$context.httpMethod", "source_ip": "$context.identity.sourceIp", "user-agent": "$context.identity.userAgent", "account_id": "$context.identity.accountId", "api_key": "$context.identity.apiKey", "caller": "$context.identity.caller", "user": "$context.identity.user", "user_arn": "$context.identity.userArn"}
 
   # --- WebSocket APIs route: $connect ---
   ApiGatewayRouteConnect:
@@ -497,18 +502,6 @@ Resources:
       ApiId: !Ref ApiGatewayApiWebSocket
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionJoinRoom.Arn}/invocations
-  ApiGatewayIntegrationResponseJoinRoom:
-    Type: AWS::ApiGatewayV2::IntegrationResponse
-    Properties:
-      ApiId: !Ref ApiGatewayApiWebSocket
-      IntegrationId: !Ref ApiGatewayIntegrationJoinRoom
-      IntegrationResponseKey: $default
-  ApiGatewayRouteResponseJoinRoom:
-    Type: AWS::ApiGatewayV2::RouteResponse
-    Properties:
-      ApiId: !Ref ApiGatewayApiWebSocket
-      RouteId: !Ref ApiGatewayRouteJoinRoom
-      RouteResponseKey: $default
   LambdaFunctionJoinRoom:
     Type: AWS::Lambda::Function
     Properties:
@@ -527,6 +520,7 @@ Resources:
           TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
           TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
           ROOM_ACTIONS_QUEUE_URL: !GetAtt SqsQueueRoomActions.QueueUrl
+          WEBSOCKET_API_ENDPOINT: !Sub ${ApiGatewayApiWebSocket.ApiEndpoint}/${ApiGatewayStageWebSocketStaging}
       TracingConfig:
         Mode: Active
   LambdaPermissionJoinRoom:

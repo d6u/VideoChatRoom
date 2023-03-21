@@ -50,10 +50,7 @@ export default class RoomStateSyncManager {
 
     this.subscriptions.push(
       this.wsObservable
-        .pipe(
-          filter((message) => message.isDelta),
-          tap((message) => this.log("new ws message", message))
-        )
+        .pipe(filter((message) => message.isDelta))
         .subscribe(rawDeltasSubject)
     );
 
