@@ -79,8 +79,9 @@ resource "aws_cloudformation_stack" "gameroom_stack" {
 }
 
 locals {
-  http_endpoint_url      = aws_cloudformation_stack.gameroom_stack.outputs["HttpEndpointUrl"]
-  websocket_endpoint_url = aws_cloudformation_stack.gameroom_stack.outputs["WebSocketEndpointUrl"]
+  http_endpoint_url        = aws_cloudformation_stack.gameroom_stack.outputs["HttpEndpointUrl"]
+  websocket_endpoint_url   = aws_cloudformation_stack.gameroom_stack.outputs["WebSocketEndpointUrl"]
+  s3_bucket_front_end_name = aws_cloudformation_stack.gameroom_stack.outputs["S3BucketFrontEndName"]
 }
 
 output "http_endpoint_url" {
@@ -91,10 +92,27 @@ output "websocket_endpoint_url" {
   value = local.websocket_endpoint_url
 }
 
+output "s3_bucket_front_end_name" {
+  value = local.s3_bucket_front_end_name
+}
+
+output "cloud_front_domain_name" {
+  value = aws_cloudformation_stack.gameroom_stack.outputs["CloudFrontDomainName"]
+}
+
 resource "local_file" "api_endpoints" {
   content = jsonencode({
     http_endpoint_url      = local.http_endpoint_url
     websocket_endpoint_url = local.websocket_endpoint_url
   })
   filename = "react-webrtc/src/api_endpoints.json"
+}
+
+resource "null_resource" "gameroom_frontend" {
+  provisioner "local-exec" {
+    working_dir = "${path.module}/react-webrtc"
+    # Use `aws s3 sync` command line to upload static files so content-type
+    # can be detected automatically
+    command = "npm run build && aws s3 sync build s3://${local.s3_bucket_front_end_name}"
+  }
 }

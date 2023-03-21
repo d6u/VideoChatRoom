@@ -107,6 +107,53 @@ Resources:
             Resource:
               - !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${SqsQueueRoomActions.QueueName}
 
+  # --- S3 ---
+  S3BucketFrontEnd:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: gameroom-frontend
+  S3BucketPolicyFrontEnd:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3BucketFrontEnd
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: !Sub ${S3BucketFrontEnd.Arn}/*
+
+  # --- CloudFront ---
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          TargetOriginId: S3BucketOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          Compress: true
+          DefaultTTL: 86400
+          MinTTL: 86400
+          MaxTTL: 31536000
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        Origins:
+          - DomainName: !Join [".", [!Ref S3BucketFrontEnd, "s3.amazonaws.com"]]
+            Id: S3BucketOrigin
+            S3OriginConfig: {}
+
   # --- DynamoDB ---
   DynamoDbTableRoomSnapshots:
     Type: AWS::DynamoDB::Table
@@ -617,3 +664,7 @@ Outputs:
       - /
       - - !GetAtt ApiGatewayApiWebSocket.ApiEndpoint
         - staging
+  S3BucketFrontEndName:
+    Value: !Ref S3BucketFrontEnd
+  CloudFrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
