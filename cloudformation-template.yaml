@@ -564,6 +564,7 @@ Resources:
           TABLE_NAME_ROOM_DELTAS: !Ref DynamoDbTableRoomDeltas
           TABLE_NAME_ROOM_TO_CLIENTS: !Ref DynamoDbTableRoomToClients
           TABLE_NAME_CLIENT_TO_ROOM: !Ref DynamoDbTableClientToRoom
+          WEBSOCKET_API_ENDPOINT: !Sub ${ApiGatewayApiWebSocket.ApiEndpoint}/${ApiGatewayStageWebSocketStaging}
       TracingConfig:
         Mode: Active
   LambdaPermissionConnectClient:

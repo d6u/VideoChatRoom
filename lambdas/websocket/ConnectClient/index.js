@@ -1,14 +1,17 @@
-import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
+import { getApiGatewayManagement } from "shared-utils";
+import { postToClient } from "shared-utils/api-gateway-management-utils.js";
+
+const apiGatewayManagementApi = getApiGatewayManagement(
+  process.env.WEBSOCKET_API_ENDPOINT.replace("wss:", "https:")
+);
 
 function parseEvent(event) {
-  const endpoint = `https://${event.requestContext.domainName}/${event.requestContext.stage}`;
   const {
     requestContext: { connectionId },
     body,
   } = event;
   const { targetClientId, messageData } = JSON.parse(body);
   return {
-    endpoint,
     connectionId,
     targetClientId,
     messageData,
@@ -18,22 +21,20 @@ function parseEvent(event) {
 export async function handler(event, context) {
   console.log("handling event", event);
 
-  const { endpoint, connectionId, targetClientId, messageData } =
-    parseEvent(event);
-
-  const apiGatewayManagementApi = new ApiGatewayManagementApi({ endpoint });
+  const { connectionId, targetClientId, messageData } = parseEvent(event);
 
   try {
-    await apiGatewayManagementApi.postToConnection({
-      ConnectionId: targetClientId,
-      Data: JSON.stringify({
-        type: "ConnectClient",
-        fromClientId: connectionId,
-        messageData,
-      }),
+    await postToClient(apiGatewayManagementApi, targetClientId, {
+      type: "ConnectClient",
+      fromClientId: connectionId,
+      messageData,
     });
   } catch (error) {
-    console.error(`Error posting to client ${targetClientId}.`, error);
+    if (error["$metadata"]?.httpStatusCode === 410) {
+      console.warn(`found stale connection ${connectionId}`);
+    } else {
+      console.error(`posting to connection ${connectionId} failed`, error);
+    }
   }
 
   return {
