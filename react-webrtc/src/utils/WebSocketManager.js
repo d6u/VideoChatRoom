@@ -52,19 +52,11 @@ export default class WebSocketManager {
   }
 
   log(...args) {
-    console.debug(
-      `%cWebSocketManager [${this.instanceId}]`,
-      "background: lightgreen",
-      ...args
-    );
+    console.debug(`WebSocketManager [${this.instanceId}]`, ...args);
   }
 
   logError(...args) {
-    console.error(
-      `%cWebSocketManager [${this.instanceId}]`,
-      "background: lightgreen",
-      ...args
-    );
+    console.error(`WebSocketManager [${this.instanceId}]`, ...args);
   }
 
   send(data) {

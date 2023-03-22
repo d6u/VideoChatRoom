@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Set } from "immutable";
-import { from, filter } from "rxjs";
+import { from, filter, BehaviorSubject } from "rxjs";
 import WebSocketManager from "../../utils/WebSocketManager";
 import RoomStateSyncManager from "../../utils/RoomStateSyncManager";
 import ClientBox from "./ClientBox";
 
 export default function Room({ roomId }) {
   const refWs = useRef(null);
+  const refLocalMediaStreamSubject = useRef(null);
+
+  if (refWs.current == null) {
+  }
+  if (refLocalMediaStreamSubject.current == null) {
+    refLocalMediaStreamSubject.current = new BehaviorSubject(null);
+  }
 
   const [wsStatus, setWsStatus] = useState("Disconnected");
   const [localClientId, setCurrentClientId] = useState(null);
-  const [localMediaStream, setLocalMediaStream] = useState(null);
   const [clientIds, setClientIds] = useState(Set());
-  const [wsMessageObserver, setWsMessageObserver] = useState(null);
 
   useEffect(() => {
     console.group("Room");
@@ -20,38 +25,26 @@ export default function Room({ roomId }) {
 
     const subscriptions = [];
 
+    refWs.current = new WebSocketManager();
     setWsStatus("Connecting");
-
-    const ws = new WebSocketManager();
-    refWs.current = ws;
-    setWsMessageObserver(ws.webSocketObservable);
 
     const roomStateSyncManager = new RoomStateSyncManager(
       roomId,
-      ws.webSocketObservable
+      refWs.current.webSocketObservable
     );
 
     subscriptions.push(
       roomStateSyncManager.snapshotsObservable.subscribe((snapshot) =>
         setClientIds(snapshot.clientIds)
-      )
-    );
-
-    subscriptions.push(
-      ws.openObserver.subscribe(() => {
+      ),
+      refWs.current.openObserver.subscribe(() => {
         setWsStatus("Connected");
-        ws.send({ action: "JoinRoom", roomId });
-      })
-    );
-
-    subscriptions.push(
-      ws.closeObserver.subscribe(() => {
+        refWs.current.send({ action: "JoinRoom", roomId });
+      }),
+      refWs.current.closeObserver.subscribe(() => {
         setWsStatus("Disconnected");
-      })
-    );
-
-    subscriptions.push(
-      ws.webSocketObservable
+      }),
+      refWs.current.webSocketObservable
         .pipe(filter((m) => !m.isDelta && m.type === "CurrentClientId"))
         .subscribe(({ clientId }) => setCurrentClientId(clientId))
     );
@@ -83,7 +76,7 @@ export default function Room({ roomId }) {
         next: (mediaStream) => {
           console.log("Getting user media succeeded.", mediaStream);
           mediaStreamTmp = mediaStream;
-          setLocalMediaStream(mediaStream);
+          refLocalMediaStreamSubject.current.next(mediaStream);
         },
         error: (err) => {
           console.warn("Getting user media failed.", err);
@@ -97,7 +90,7 @@ export default function Room({ roomId }) {
       }
 
       mediaStreamTmp?.getTracks().forEach((track) => track.stop());
-      setLocalMediaStream(null);
+      refLocalMediaStreamSubject.current.next(null);
     };
   }, []);
 
@@ -119,10 +112,10 @@ export default function Room({ roomId }) {
             <ClientBox
               key={id}
               clientId={id}
-              localMediaStream={localMediaStream}
-              localClientId={localClientId}
-              wsMessageObserver={wsMessageObserver}
+              wsMessageObserver={refWs.current.webSocketObservable}
               onWsMessage={onWsMessage}
+              localMediaStreamSubject={refLocalMediaStreamSubject.current}
+              localClientId={localClientId}
             />
           ))
           .toArray()}

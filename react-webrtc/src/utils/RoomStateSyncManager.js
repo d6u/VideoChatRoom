@@ -169,19 +169,11 @@ export default class RoomStateSyncManager {
   }
 
   log(...args) {
-    console.debug(
-      `%cRoomStateSyncManager [${this.instanceId}]`,
-      "background: yellow",
-      ...args
-    );
+    console.debug(`RoomStateSyncManager [${this.instanceId}]`, ...args);
   }
 
   logError(...args) {
-    console.error(
-      `%cRoomStateSyncManager [${this.instanceId}]`,
-      "background: yellow",
-      ...args
-    );
+    console.error(`RoomStateSyncManager [${this.instanceId}]`, ...args);
   }
 
   destroy() {

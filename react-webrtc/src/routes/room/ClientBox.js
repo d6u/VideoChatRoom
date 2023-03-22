@@ -4,38 +4,61 @@ import ClientBoxRemote from "./ClientBoxRemote";
 
 export default function ClientBox({
   clientId,
-  localMediaStream,
-  localClientId,
   wsMessageObserver,
   onWsMessage,
+  localMediaStreamSubject,
+  localClientId,
 }) {
   const isLocal = localClientId != null && clientId === localClientId;
   const isRemote = localClientId != null && clientId !== localClientId;
 
   if (isLocal) {
     return (
-      <ClientBoxLocal clientId={clientId} localMediaStream={localMediaStream} />
+      <ClientBoxLocal
+        key={clientId}
+        clientId={clientId}
+        localMediaStreamSubject={localMediaStreamSubject}
+      />
     );
   } else if (isRemote) {
     return (
       <ClientBoxRemote
+        key={clientId}
         clientId={clientId}
-        localMediaStream={localMediaStream}
         wsMessageObserver={wsMessageObserver}
         onWsMessage={onWsMessage}
+        localMediaStreamSubject={localMediaStreamSubject}
       />
     );
   } else {
-    return null;
+    return (
+      <div
+        className={classNames({
+          "Room_single-video-container": true,
+        })}
+      >
+        <div>
+          <code>(UNKNOWN) {clientId}</code>
+        </div>
+      </div>
+    );
   }
 }
 
-function ClientBoxLocal({ clientId, localMediaStream }) {
+function ClientBoxLocal({ clientId, localMediaStreamSubject }) {
   const refVideo = useRef(null);
 
   useEffect(() => {
-    refVideo.current.srcObject = localMediaStream;
-  }, [localMediaStream]);
+    const subscription = localMediaStreamSubject.subscribe((mediaStream) => {
+      if (mediaStream != null) {
+        refVideo.current.srcObject = mediaStream;
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [localMediaStreamSubject]);
 
   return (
     <div

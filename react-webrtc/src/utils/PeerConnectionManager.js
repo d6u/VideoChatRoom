@@ -1,4 +1,4 @@
-import { concatWith, ReplaySubject, Subject, fromEvent, tap } from "rxjs";
+import { Subject, fromEvent } from "rxjs";
 
 const WEBRTC_CONFIG = {
   iceServers: [
@@ -12,11 +12,12 @@ const WEBRTC_CONFIG = {
 export default class PeerConnectionManager extends EventTarget {
   isStopped = false;
   subscriptions = [];
-  remoteIceCandidatesSubject = new ReplaySubject();
-  remoteDescriptionSetSubject = new Subject();
+  // remoteIceCandidatesSubject = new ReplaySubject();
+  // remoteDescriptionSetSubject = new Subject();
   localIceCandidatesSubject = new Subject();
   answerSubject = new Subject();
   tracksSubject = new Subject();
+  negotiationNeededSubject = new Subject();
 
   constructor(remoteClientId) {
     super();
@@ -69,6 +70,12 @@ export default class PeerConnectionManager extends EventTarget {
             break;
         }
       }),
+      fromEvent(this.pc, "negotiationneeded").subscribe(() => {
+        this.log(
+          `negotiationneeded: signalingState = ${this.pc.signalingState}`
+        );
+        this.negotiationNeededSubject.next(null);
+      }),
       fromEvent(this.pc, "track").subscribe((event) => {
         this.log(`ontrack:`, event.streams, event.track);
         this.tracksSubject.next(event);
@@ -81,16 +88,19 @@ export default class PeerConnectionManager extends EventTarget {
           this.log("onicecandidate:", event.candidate);
           this.localIceCandidatesSubject.next(event.candidate);
         }
-      }),
-      this.remoteDescriptionSetSubject
-        .pipe(
-          concatWith(this.remoteIceCandidatesSubject),
-          tap(() => this.log("receive remote ice candidate"))
-        )
-        .subscribe((iceCandidate) => {
-          this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
-        })
+      })
+      // this.remoteIceCandidatesSubject
+      //   .pipe(tap(() => this.log("receive remote ice candidate")))
+      //   .subscribe((iceCandidate) => {})
     );
+  }
+
+  getSignalingState() {
+    return this.pc.signalingState;
+  }
+
+  getPc() {
+    return this.pc;
   }
 
   async createOffer() {
@@ -105,12 +115,7 @@ export default class PeerConnectionManager extends EventTarget {
     return offer;
   }
 
-  async setOffer(offer) {
-    await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
-    if (this.isStopped) {
-      return;
-    }
-    this.remoteDescriptionSetSubject.complete();
+  async createAnswer() {
     const answer = await this.pc.createAnswer();
     if (this.isStopped) {
       return;
@@ -119,17 +124,27 @@ export default class PeerConnectionManager extends EventTarget {
     if (this.isStopped) {
       return;
     }
-    this.answerSubject.next(answer);
-    this.answerSubject.complete();
+    return answer;
+  }
+
+  async setOffer(offer) {
+    await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
+    if (this.isStopped) {
+      return;
+    }
+    // this.remoteDescriptionSetSubject.complete();
+    // this.answerSubject.next(answer);
+    // this.answerSubject.complete();
   }
 
   async setAnswer(answer) {
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
-    this.remoteDescriptionSetSubject.complete();
+    // this.remoteDescriptionSetSubject.complete();
   }
 
-  addIceCandidate(iceCandidate) {
-    this.remoteIceCandidatesSubject.next(iceCandidate);
+  async addIceCandidate(iceCandidate) {
+    await this.pc.addIceCandidate(new RTCIceCandidate(iceCandidate));
+    // this.remoteIceCandidatesSubject.next(iceCandidate);
   }
 
   addTrack(track, stream) {
