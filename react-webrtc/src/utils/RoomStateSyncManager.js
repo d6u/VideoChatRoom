@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import {
   BehaviorSubject,
   combineLatestWith,
@@ -8,6 +7,7 @@ import {
   from,
   map,
   mergeMap,
+  of,
   share,
   shareReplay,
   Subject,
@@ -18,6 +18,7 @@ import {
 } from "rxjs";
 import { Record, Set, List } from "immutable";
 import { getRoomSnapshot, getRoomDeltas } from "./Api";
+import Logger from "./Logger";
 
 const Snapshot = Record({
   roomId: "",
@@ -35,8 +36,8 @@ export default class RoomStateSyncManager {
   subscriptions = [];
 
   constructor(roomId, wsObservable) {
-    this.instanceId = nanoid();
-    this.log("constructor()");
+    this.logger = new Logger("RoomStateSyncManager");
+    this.logger.log("constructor()");
 
     this.roomId = roomId;
     this.wsObservable = wsObservable;
@@ -49,9 +50,11 @@ export default class RoomStateSyncManager {
 
     const deltasObservable = rawDeltasSubject.pipe(
       map((data) => Delta(data)),
-      tap((delta) => this.log("new delta", delta.toJS())),
+      tap((delta) => this.logger.log("new delta", delta.toJS())),
       share()
     );
+
+    let isFetchingGapDeltas = false;
 
     this.subscriptions.push(
       // --- Initial snapshot ---
@@ -64,7 +67,7 @@ export default class RoomStateSyncManager {
               clientIds: Set(data.clientIds),
             })
           ),
-          tap((snapshot) => this.log("new snapshot", snapshot.toJS()))
+          tap((snapshot) => this.logger.log("new snapshot", snapshot.toJS()))
         )
         .subscribe((delta) =>
           // Not directly subscribing to snapshotsSubject so we don't complete
@@ -79,7 +82,7 @@ export default class RoomStateSyncManager {
       zip(
         deltasObservable,
         deltasObservable.pipe(
-          mergeMap(() => deltasAccumulatorSubject.pipe(take(1)))
+          mergeMap(() => of(deltasAccumulatorSubject.getValue()))
         )
       )
         .pipe(
@@ -90,6 +93,13 @@ export default class RoomStateSyncManager {
             deltas.sortBy((d) => d.seq).filter((d) => d.seq > snapshot.seq),
             snapshot,
           ]),
+          tap(([deltas, snapshot]) => {
+            const snapshotStr = JSON.stringify(snapshot.toJS(), null, 4);
+            const deltasStr = JSON.stringify(deltas.toJS(), null, 4);
+            this.logger.debug(
+              `[1] snapshot = ${snapshotStr}\ndeltas = ${deltasStr}`
+            );
+          }),
           mergeMap(([deltas, snapshot]) => {
             if (deltas.size === 0) {
               deltasAccumulatorSubject.next(List());
@@ -114,29 +124,43 @@ export default class RoomStateSyncManager {
               return from(nextDeltas);
             }
 
-            this.log(
-              `there are gaps in delta and snapshot, fetching deltas between ${
-                snapshot.seq + 1
-              } and ${deltas.getIn([0, "seq"]) - 1}`
-            );
+            if (!isFetchingGapDeltas) {
+              this.logger.log(
+                `there are gaps in delta and snapshot, fetching deltas between ${
+                  snapshot.seq + 1
+                } and ${deltas.getIn([0, "seq"]) - 1}`
+              );
 
-            // TODO: Making sure we don't double fetching
-            this.subscriptions.push(
-              from(
-                getRoomDeltas(
-                  roomId,
-                  snapshot.seq + 1,
-                  deltas.getIn([0, "seq"]) - 1
+              isFetchingGapDeltas = true;
+              this.subscriptions.push(
+                from(
+                  getRoomDeltas(
+                    roomId,
+                    snapshot.seq + 1,
+                    deltas.getIn([0, "seq"]) - 1
+                  )
                 )
-              )
-                .pipe(mergeMap((fetchedDeltas) => from(fetchedDeltas)))
-                .subscribe(rawDeltasSubject)
-            );
+                  .pipe(
+                    tap(() => {
+                      isFetchingGapDeltas = false;
+                    }),
+                    mergeMap((fetchedDeltas) => from(fetchedDeltas))
+                  )
+                  .subscribe((data) => rawDeltasSubject.next(data))
+              );
+            }
 
             deltasAccumulatorSubject.next(deltas);
             return EMPTY;
           }),
           zipWith(snapshotsSubject),
+          tap(([delta, snapshot]) => {
+            const snapshotStr = JSON.stringify(snapshot.toJS(), null, 4);
+            const deltaStr = JSON.stringify(delta.toJS(), null, 4);
+            this.logger.debug(
+              `[2] snapshot = ${snapshotStr}\ndelta = ${deltaStr}`
+            );
+          }),
           map(([delta, snapshot]) => {
             switch (delta.type) {
               case "ClientJoin": {
@@ -157,14 +181,22 @@ export default class RoomStateSyncManager {
                 return snapshot;
               }
             }
-          })
+          }),
+          tap((snapshot) =>
+            this.logger.debug(
+              `[3] snapshot = ${JSON.stringify(snapshot.toJS(), null, 4)}`
+            )
+          )
         )
         .subscribe(snapshotsSubject)
     );
 
     this.snapshotsObservable = snapshotsSubject.pipe(
-      tap((delta) => this.log("finalized snapshot for UI", delta.toJS())),
-      shareReplay(1)
+      tap((snapshot) =>
+        this.logger.log(
+          `[4] snapshot = ${JSON.stringify(snapshot.toJS(), null, 4)}`
+        )
+      )
     );
   }
 
@@ -177,7 +209,7 @@ export default class RoomStateSyncManager {
   }
 
   destroy() {
-    this.log(`destory()`);
+    this.logger.log(`destory()`);
 
     for (const subscription of this.subscriptions) {
       subscription.unsubscribe();

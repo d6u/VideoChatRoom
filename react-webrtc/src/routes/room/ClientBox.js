@@ -4,8 +4,6 @@ import ClientBoxRemote from "./ClientBoxRemote";
 
 export default function ClientBox({
   clientId,
-  wsMessageObserver,
-  onWsMessage,
   localMediaStreamSubject,
   localClientId,
 }) {
@@ -25,8 +23,6 @@ export default function ClientBox({
       <ClientBoxRemote
         key={clientId}
         clientId={clientId}
-        wsMessageObserver={wsMessageObserver}
-        onWsMessage={onWsMessage}
         localMediaStreamSubject={localMediaStreamSubject}
       />
     );

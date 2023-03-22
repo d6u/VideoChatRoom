@@ -1,14 +1,36 @@
-import { useEffect, useRef, useState } from "react";
-import { filter, from, mergeMap } from "rxjs";
+import { useEffect, useId, useRef, useState } from "react";
+import { filter, from, mergeMap, tap } from "rxjs";
 import classNames from "classnames";
+import Logger from "../../utils/Logger";
+import webSocketManager from "../../utils/WebSocketManager";
 import PeerConnectionManager from "../../utils/PeerConnectionManager";
 
-export default function ClientBoxRemote({
-  clientId,
-  wsMessageObserver,
-  onWsMessage,
-  localMediaStreamSubject,
-}) {
+const logger = new Logger("ClientBoxRemote");
+
+function useDebugPrevious(label, variable) {
+  const refCount = useRef(0);
+  const ref = useRef(null);
+  useEffect(() => {
+    logger.log(
+      `${label} [${refCount.current++}] ==>`,
+      Object.is(ref.current, variable),
+      "previous =",
+      ref.current,
+      "current =",
+      variable
+    );
+    ref.current = variable;
+  }, [variable]);
+}
+
+export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
+  const refLogger = useRef(null);
+  if (refLogger.current == null) {
+    refLogger.current = new Logger("ClientBoxRemote");
+  }
+
+  const id = useId();
+
   const refVideo = useRef(null);
   const refPcm = useRef(null);
 
@@ -23,7 +45,12 @@ export default function ClientBoxRemote({
     };
   }, [clientId]);
 
+  useDebugPrevious("clientId", clientId);
+  useDebugPrevious("localMediaStreamSubject", localMediaStreamSubject);
+
   useEffect(() => {
+    console.log("useEffect() id", id);
+
     const subscriptions = [];
 
     const randomValue = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
@@ -32,7 +59,7 @@ export default function ClientBoxRemote({
 
     // Defer executing to avoid immediate clean up in useEffect()
     const timeoutHandler = setTimeout(() => {
-      onWsMessage({
+      webSocketManager.send({
         action: "ConnectClient",
         targetClientId: clientId,
         messageData: {
@@ -43,14 +70,15 @@ export default function ClientBoxRemote({
     });
 
     subscriptions.push(
-      wsMessageObserver
+      webSocketManager.messagesSubject
         .pipe(
           filter(
             (m) =>
               !m.isDelta &&
               m.type === "ConnectClient" &&
               m.fromClientId === clientId
-          )
+          ),
+          tap(({ messageData }) => console.log("new message data", messageData))
         )
         .subscribe(({ messageData }) => {
           function handleLeaderSetting() {
@@ -65,7 +93,7 @@ export default function ClientBoxRemote({
                 setPeerConnectionRole("ANSWER");
               }
 
-              onWsMessage({
+              webSocketManager.send({
                 action: "ConnectClient",
                 targetClientId: clientId,
                 messageData: {
@@ -85,7 +113,7 @@ export default function ClientBoxRemote({
 
               subscriptions.push(
                 refPcm.current.localIceCandidatesSubject.subscribe((cand) =>
-                  onWsMessage({
+                  webSocketManager.send({
                     action: "ConnectClient",
                     targetClientId: clientId,
                     messageData: cand,
@@ -94,7 +122,7 @@ export default function ClientBoxRemote({
                 refPcm.current.negotiationNeededSubject.subscribe(() => {
                   subscriptions.push(
                     from(refPcm.current.createOffer()).subscribe((offer) =>
-                      onWsMessage({
+                      webSocketManager.send({
                         action: "ConnectClient",
                         targetClientId: clientId,
                         messageData: offer,
@@ -159,7 +187,7 @@ export default function ClientBoxRemote({
                   obs
                     .pipe(mergeMap(() => from(refPcm.current.createAnswer())))
                     .subscribe((answer) => {
-                      onWsMessage({
+                      webSocketManager.send({
                         action: "ConnectClient",
                         targetClientId: clientId,
                         messageData: answer,
@@ -184,7 +212,7 @@ export default function ClientBoxRemote({
 
       clearTimeout(timeoutHandler);
     };
-  }, [clientId, localMediaStreamSubject, wsMessageObserver, onWsMessage]);
+  }, [clientId, localMediaStreamSubject]);
 
   return (
     <div className={classNames({ "Room_single-video-container": true })}>

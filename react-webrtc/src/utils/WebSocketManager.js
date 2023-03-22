@@ -1,66 +1,76 @@
-import { nanoid } from "nanoid";
-import { share, Subject, tap } from "rxjs";
+import { concatMap, defer, share, Subject, tap, timer } from "rxjs";
 import { webSocket } from "rxjs/webSocket";
-
+import Logger from "./Logger";
 import endpoints from "../api_endpoints.json";
 
-export default class WebSocketManager {
-  subscription = null;
+class WebSocketManager {
+  subscriptions = [];
   openObserver = new Subject();
   closeObserver = new Subject();
+  messagesSubject = new Subject();
 
   constructor() {
-    this.instanceId = nanoid();
-    this.log("ctor()");
+    this.logger = new Logger("WebSocketManager");
+
     this.webSocketSubject = webSocket({
       url: endpoints.websocket_endpoint_url,
       deserializer: (event) => {
         try {
           return JSON.parse(event.data);
         } catch (error) {
-          this.logError("JSON parse error.", event.data);
+          this.logger.error("JSON parse error.", event.data);
           return {};
         }
       },
       openObserver: {
         next: (data) => {
-          this.log("onopen", data);
+          this.logger.debug("connection open");
           this.openObserver.next();
         },
       },
       closeObserver: {
         next: (event) => {
           // More detail in https://www.rfc-editor.org/rfc/rfc6455#section-11.7
-          this.log("onclose", event.code);
+          this.logger.debug("connection close", event.code);
           this.closeObserver.next();
         },
       },
     });
 
-    this.webSocketObservable = this.webSocketSubject.pipe(
+    this.webSocketMessagesObservable = this.webSocketSubject.pipe(
       tap({
         next: (data) => {
-          this.log("onmessage", data);
+          this.logger.debug("message", data);
         },
         error: (error) => {
           // There is no error detail for WebSocket errors.
-          this.logError("onerror", error);
+          this.logger.error("error", error);
         },
-      }),
-      share()
+      })
     );
   }
 
-  log(...args) {
-    console.debug(`WebSocketManager [${this.instanceId}]`, ...args);
+  connect() {
+    this.logger.log("connect()");
+    this.subscriptions.push(
+      this.webSocketMessagesObservable.subscribe(this.messagesSubject)
+    );
   }
 
-  logError(...args) {
-    console.error(`WebSocketManager [${this.instanceId}]`, ...args);
+  disconnect() {
+    this.logger.log("disconnect()");
+    for (const subscription of this.subscriptions) {
+      subscription.unsubscribe();
+    }
+    this.subscriptions = [];
   }
 
   send(data) {
-    this.log("sending message", JSON.stringify(data));
+    this.logger.debug("sending message", JSON.stringify(data));
     this.webSocketSubject.next(data);
   }
 }
+
+const webSocketManager = new WebSocketManager();
+
+export default webSocketManager;

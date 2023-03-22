@@ -1,66 +1,82 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Set } from "immutable";
 import { from, filter, BehaviorSubject } from "rxjs";
-import WebSocketManager from "../../utils/WebSocketManager";
+import Logger from "../../utils/Logger";
+import webSocketManager from "../../utils/WebSocketManager";
 import RoomStateSyncManager from "../../utils/RoomStateSyncManager";
 import ClientBox from "./ClientBox";
 
+const logger = new Logger("Room");
+
 export default function Room({ roomId }) {
-  const refWs = useRef(null);
   const refLocalMediaStreamSubject = useRef(null);
 
-  if (refWs.current == null) {
-  }
   if (refLocalMediaStreamSubject.current == null) {
     refLocalMediaStreamSubject.current = new BehaviorSubject(null);
   }
 
-  const [wsStatus, setWsStatus] = useState("Disconnected");
+  const [wsStatus, setWsStatus] = useState("Connecting");
   const [localClientId, setCurrentClientId] = useState(null);
   const [clientIds, setClientIds] = useState(Set());
 
   useEffect(() => {
-    console.group("Room");
-    console.group("Room setup");
+    logger.log("[0] useEffect setup");
+    // Due to useEffect in React dev build executes twice on component mount,
+    // we delay WebSocket connection by a small amount of time, to fix an issue
+    // in Safari failing to connect when connection is close immediately before
+    // connection.
+    const timeoutHandler = setTimeout(() => {
+      webSocketManager.connect();
+    }, 200);
+
+    return () => {
+      logger.log("[0] useEffect cleanup");
+      clearTimeout(timeoutHandler);
+      webSocketManager.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    logger.log("[1] useEffect setup");
 
     const subscriptions = [];
 
-    refWs.current = new WebSocketManager();
-    setWsStatus("Connecting");
-
     const roomStateSyncManager = new RoomStateSyncManager(
       roomId,
-      refWs.current.webSocketObservable
+      webSocketManager.messagesSubject
     );
 
     subscriptions.push(
-      roomStateSyncManager.snapshotsObservable.subscribe((snapshot) =>
-        setClientIds(snapshot.clientIds)
-      ),
-      refWs.current.openObserver.subscribe(() => {
+      webSocketManager.openObserver.subscribe(() => {
         setWsStatus("Connected");
-        refWs.current.send({ action: "JoinRoom", roomId });
+        webSocketManager.send({ action: "JoinRoom", roomId });
       }),
-      refWs.current.closeObserver.subscribe(() => {
+      webSocketManager.closeObserver.subscribe(() => {
         setWsStatus("Disconnected");
       }),
-      refWs.current.webSocketObservable
+      webSocketManager.messagesSubject
         .pipe(filter((m) => !m.isDelta && m.type === "CurrentClientId"))
-        .subscribe(({ clientId }) => setCurrentClientId(clientId))
+        .subscribe(({ clientId }) => setCurrentClientId(clientId)),
+      roomStateSyncManager.snapshotsObservable.subscribe((snapshot) => {
+        logger.log(
+          `roomStateSyncManager.snapshotsObservable ${JSON.stringify(
+            snapshot.toJS(),
+            null,
+            4
+          )}`
+        );
+        setClientIds(snapshot.clientIds);
+      })
     );
 
-    console.groupEnd();
+    logger.log("[1] useEffect setup end");
     return () => {
-      console.group("Room cleanup");
-
+      logger.log("[1] useEffect cleanup");
       for (const subscription of subscriptions) {
         subscription.unsubscribe();
       }
-
       roomStateSyncManager.destroy();
-
-      console.groupEnd();
-      console.groupEnd();
+      logger.log("[1] useEffect cleanup end");
     };
   }, [roomId]);
 
@@ -94,10 +110,6 @@ export default function Room({ roomId }) {
     };
   }, []);
 
-  const onWsMessage = useCallback((message) => {
-    refWs.current.send(message);
-  }, []);
-
   return (
     <div>
       <h1>
@@ -112,8 +124,6 @@ export default function Room({ roomId }) {
             <ClientBox
               key={id}
               clientId={id}
-              wsMessageObserver={refWs.current.webSocketObservable}
-              onWsMessage={onWsMessage}
               localMediaStreamSubject={refLocalMediaStreamSubject.current}
               localClientId={localClientId}
             />
