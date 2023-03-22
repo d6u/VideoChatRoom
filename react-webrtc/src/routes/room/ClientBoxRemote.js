@@ -102,11 +102,15 @@ export default function ClientBoxRemote({
                         messageData: candidate,
                       })
                   ),
-                  refPcm.current.tracksSubject.subscribe((track) => {
-                    if (refVideo.current.srcObject == null) {
-                      refVideo.current.srcObject = new MediaStream();
+                  refPcm.current.tracksSubject.subscribe((event) => {
+                    if (event.streams != null && event.streams[0] != null) {
+                      refVideo.current.srcObject = event.streams[0];
+                    } else {
+                      if (refVideo.current.srcObject == null) {
+                        refVideo.current.srcObject = new MediaStream();
+                      }
+                      refVideo.current.srcObject.addTrack(event.track);
                     }
-                    refVideo.current.srcObject.addTrack(track);
                   })
                 );
 

@@ -25,19 +25,11 @@ export default class PeerConnectionManager extends EventTarget {
   }
 
   log(...args) {
-    console.log(
-      "%cPeerConnectionManager",
-      "background: blue; color: white",
-      ...args
-    );
+    console.log("PeerConnectionManager", ...args);
   }
 
   logError(...args) {
-    console.error(
-      "%cPeerConnectionManager",
-      "background: blue; color: white",
-      ...args
-    );
+    console.error("PeerConnectionManager", ...args);
   }
 
   destroy() {
@@ -78,8 +70,8 @@ export default class PeerConnectionManager extends EventTarget {
         }
       }),
       fromEvent(this.pc, "track").subscribe((event) => {
-        this.log(`ontrack: ${event.track.kind}, ${event.track.id}`);
-        this.tracksSubject.next(event.track);
+        this.log(`ontrack:`, event.streams, event.track);
+        this.tracksSubject.next(event);
       }),
       fromEvent(this.pc, "icecandidate").subscribe((event) => {
         if (event.candidate == null) {
