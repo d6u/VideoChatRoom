@@ -34,7 +34,6 @@ function ClientBoxLocal({ clientId, localMediaStream }) {
   const refVideo = useRef(null);
 
   useEffect(() => {
-    console.log("Running useEffect(callback, [localMediaStream])");
     refVideo.current.srcObject = localMediaStream;
   }, [localMediaStream]);
 

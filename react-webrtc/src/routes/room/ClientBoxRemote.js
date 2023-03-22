@@ -19,12 +19,11 @@ export default function ClientBoxRemote({
     refPcm.current.createConnection();
 
     return () => {
-      refPcm.current?.destroy();
+      refPcm.current.destroy();
     };
   }, [clientId]);
 
   useEffect(() => {
-    console.log("Running useEffect(callback, [localMediaStream])");
     if (localMediaStream != null) {
       localMediaStream.getTracks().forEach((track) => {
         refPcm.current.addTrack(track, localMediaStream);
@@ -36,13 +35,19 @@ export default function ClientBoxRemote({
     const subscriptions = [];
 
     const randomValue = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
+    let hasKnownPeerConnection = false;
+    let peerConnectionRoleTmp = null;
 
     // Defer executing this to avoid thrashing this useEffect()
     const timeoutHandler = setTimeout(() => {
       onWsMessage({
         action: "ConnectClient",
         targetClientId: clientId,
-        messageData: { type: "SelectingLeader", randomValue },
+        messageData: {
+          type: "SelectingLeader",
+          randomValue,
+          hasKnownPeerConnection: false,
+        },
       });
     });
 
@@ -59,47 +64,73 @@ export default function ClientBoxRemote({
         .subscribe(({ messageData }) => {
           switch (messageData.type) {
             case "SelectingLeader":
-              subscriptions.push(
-                refPcm.current.localIceCandidatesSubject.subscribe(
-                  (candidate) =>
-                    onWsMessage({
-                      action: "ConnectClient",
-                      targetClientId: clientId,
-                      messageData: candidate,
-                    })
-                ),
-                refPcm.current.tracksSubject.subscribe((track) => {
-                  if (refVideo.current.srcObject == null) {
-                    refVideo.current.srcObject = new MediaStream();
-                  }
-                  refVideo.current.srcObject.addTrack(track);
-                })
-              );
+              console.log("SelectingLeader", messageData);
 
-              if (randomValue > messageData.randomValue) {
-                setPeerConnectionRole("OFFER");
+              // --- First time receiving SelectingLeader message ---
 
+              if (!hasKnownPeerConnection) {
+                hasKnownPeerConnection = true;
+
+                if (randomValue > messageData.randomValue) {
+                  peerConnectionRoleTmp = "OFFER";
+                  setPeerConnectionRole("OFFER");
+                } else {
+                  peerConnectionRoleTmp = "ANSWER";
+                  setPeerConnectionRole("ANSWER");
+                }
+
+                onWsMessage({
+                  action: "ConnectClient",
+                  targetClientId: clientId,
+                  messageData: {
+                    type: "SelectingLeader",
+                    randomValue,
+                    hasKnownPeerConnection: true,
+                  },
+                });
+              }
+
+              // --- Check if remote client is ready ---
+
+              if (messageData.hasKnownPeerConnection) {
                 subscriptions.push(
-                  from(refPcm.current.createOffer()).subscribe((offer) =>
-                    onWsMessage({
-                      action: "ConnectClient",
-                      targetClientId: clientId,
-                      messageData: offer,
-                    })
-                  )
+                  refPcm.current.localIceCandidatesSubject.subscribe(
+                    (candidate) =>
+                      onWsMessage({
+                        action: "ConnectClient",
+                        targetClientId: clientId,
+                        messageData: candidate,
+                      })
+                  ),
+                  refPcm.current.tracksSubject.subscribe((track) => {
+                    if (refVideo.current.srcObject == null) {
+                      refVideo.current.srcObject = new MediaStream();
+                    }
+                    refVideo.current.srcObject.addTrack(track);
+                  })
                 );
-              } else {
-                setPeerConnectionRole("ANSWER");
 
-                subscriptions.push(
-                  refPcm.current.answerSubject.subscribe((answer) =>
-                    onWsMessage({
-                      action: "ConnectClient",
-                      targetClientId: clientId,
-                      messageData: answer,
-                    })
-                  )
-                );
+                if (peerConnectionRoleTmp === "OFFER") {
+                  subscriptions.push(
+                    from(refPcm.current.createOffer()).subscribe((offer) =>
+                      onWsMessage({
+                        action: "ConnectClient",
+                        targetClientId: clientId,
+                        messageData: offer,
+                      })
+                    )
+                  );
+                } else {
+                  subscriptions.push(
+                    refPcm.current.answerSubject.subscribe((answer) =>
+                      onWsMessage({
+                        action: "ConnectClient",
+                        targetClientId: clientId,
+                        messageData: answer,
+                      })
+                    )
+                  );
+                }
               }
               break;
             case "offer":
