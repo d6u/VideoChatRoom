@@ -41,7 +41,31 @@ export default class RoomStateSyncManager {
     this.roomId = roomId;
     this.wsObservable = wsObservable;
 
-    // === Deltas ===
+    /**
+     * === READ FIRST ===
+     *
+     * Below, I tried to do a couple things:
+     *
+     * - On every delta we received we accumulate them into a list.
+     * - Everytime thre is a new delta or a new snapshot (if it's a new detla,
+     *   accumulate it in the list first), trigger the logic to apply deltas
+     *   to existing snapshot to come up with a new snapshot.
+     * - In this process we remove the delta that is already applied to the
+     *   snapshot from the deltas list.
+     * - When a delta's seq # is larged than the snapshot's seq # by more
+     *   than 1, it means there is an gap. Stop further process and start
+     *   fetching deltas to fill the gap, and repeat above process.
+     * - The new snapshot is then supplied as new snapshot, thus triggering
+     *   the flow from the beginning again.
+     * - Do above until all deltas have exhausted. Then we will wait for new
+     *   deltas from WebSocket API.
+     *
+     * Below logic are very involved and possibly over engineered just to show
+     * case how we can implement above requirements using RxJS.
+     *
+     * Using a more traditional reactive state management framework will yield
+     * a much simpler and easy to understand implementation.
+     */
 
     const rawDeltasSubject = new Subject();
     const deltaListsSubject = new BehaviorSubject(List());
