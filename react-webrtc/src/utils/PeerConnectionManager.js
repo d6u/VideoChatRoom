@@ -1,4 +1,5 @@
-import { Subject, fromEvent } from "rxjs";
+import { Subject, fromEvent, BehaviorSubject } from "rxjs";
+import Logger from "./Logger";
 
 const WEBRTC_CONFIG = {
   iceServers: [
@@ -9,7 +10,7 @@ const WEBRTC_CONFIG = {
   iceCandidatePoolSize: 10,
 };
 
-export default class PeerConnectionManager extends EventTarget {
+export default class PeerConnectionManager {
   isStopped = false;
   subscriptions = [];
   // remoteIceCandidatesSubject = new ReplaySubject();
@@ -20,21 +21,13 @@ export default class PeerConnectionManager extends EventTarget {
   negotiationNeededSubject = new Subject();
 
   constructor(remoteClientId) {
-    super();
-    this.log(`constructor()`);
+    this.logger = new Logger("PeerConnectionManager");
+    this.logger.log(`constructor()`);
     this.remoteClientId = remoteClientId;
   }
 
-  log(...args) {
-    console.log("PeerConnectionManager", ...args);
-  }
-
-  logError(...args) {
-    console.error("PeerConnectionManager", ...args);
-  }
-
   destroy() {
-    this.log(`destroy()`);
+    this.logger.log(`destroy()`);
 
     this.isStopped = true;
 
@@ -47,50 +40,55 @@ export default class PeerConnectionManager extends EventTarget {
   }
 
   createConnection() {
-    this.log("creating peer connection.");
+    this.logger.log("creating peer connection.");
 
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
 
+    this.logger.log(`signalingstatechange: ${this.pc.signalingState}`);
+
+    this.signalingStateSubject = new BehaviorSubject(this.pc.signalingState);
+
     this.subscriptions.push(
       fromEvent(this.pc, "signalingstatechange").subscribe(() => {
-        this.log(`signalingstatechange: ${this.pc.signalingState}`);
+        this.logger.log(`signalingstatechange: ${this.pc.signalingState}`);
+        this.signalingStateSubject.next(this.pc.signalingState);
       }),
       fromEvent(this.pc, "icegatheringstatechange").subscribe(() => {
-        this.log(`onicegatheringstatechange: ${this.pc.iceGatheringState}`);
+        this.logger.debug(
+          `onicegatheringstatechange: ${this.pc.iceGatheringState}`
+        );
       }),
       fromEvent(this.pc, "iceconnectionstatechange").subscribe(() => {
-        this.log(`oniceconnectionstatechange: ${this.pc.iceConnectionState}`);
+        this.logger.debug(
+          `oniceconnectionstatechange: ${this.pc.iceConnectionState}`
+        );
       }),
       fromEvent(this.pc, "connectionstatechange").subscribe(() => {
-        this.log(`onconnectionstatechange: ${this.pc.connectionState}`);
-        switch (this.pc.connectionState) {
-          case "failed":
-            break;
-          default:
-            break;
-        }
+        this.logger.debug(
+          `onconnectionstatechange: ${this.pc.connectionState}`
+        );
       }),
       fromEvent(this.pc, "negotiationneeded").subscribe(() => {
-        this.log(
+        this.logger.log(
           `negotiationneeded: signalingState = ${this.pc.signalingState}`
         );
         this.negotiationNeededSubject.next(null);
       }),
       fromEvent(this.pc, "track").subscribe((event) => {
-        this.log(`ontrack:`, event.streams, event.track);
+        this.logger.log(`ontrack:`, event.streams, event.track);
         this.tracksSubject.next(event);
       }),
       fromEvent(this.pc, "icecandidate").subscribe((event) => {
         if (event.candidate == null) {
-          this.log(`no more ICE candidates`);
+          this.logger.log(`no more ICE candidates`);
           this.localIceCandidatesSubject.complete();
         } else {
-          this.log("onicecandidate:", event.candidate);
+          this.logger.log("new local icecandidate");
           this.localIceCandidatesSubject.next(event.candidate);
         }
       })
       // this.remoteIceCandidatesSubject
-      //   .pipe(tap(() => this.log("receive remote ice candidate")))
+      //   .pipe(tap(() => this.logger.log("receive remote ice candidate")))
       //   .subscribe((iceCandidate) => {})
     );
   }

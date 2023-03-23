@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { filter, from, mergeMap, tap } from "rxjs";
+import { filter, from, mergeMap, ReplaySubject, tap } from "rxjs";
 import classNames from "classnames";
 import Logger from "../../utils/Logger";
 import webSocketManager from "../../utils/WebSocketManager";
@@ -7,30 +7,7 @@ import PeerConnectionManager from "../../utils/PeerConnectionManager";
 
 const logger = new Logger("ClientBoxRemote");
 
-function useDebugPrevious(label, variable) {
-  const refCount = useRef(0);
-  const ref = useRef(null);
-  useEffect(() => {
-    logger.log(
-      `${label} [${refCount.current++}] ==>`,
-      Object.is(ref.current, variable),
-      "previous =",
-      ref.current,
-      "current =",
-      variable
-    );
-    ref.current = variable;
-  }, [variable]);
-}
-
 export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
-  const refLogger = useRef(null);
-  if (refLogger.current == null) {
-    refLogger.current = new Logger("ClientBoxRemote");
-  }
-
-  const id = useId();
-
   const refVideo = useRef(null);
   const refPcm = useRef(null);
 
@@ -45,17 +22,15 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     };
   }, [clientId]);
 
-  useDebugPrevious("clientId", clientId);
-  useDebugPrevious("localMediaStreamSubject", localMediaStreamSubject);
-
   useEffect(() => {
-    console.log("useEffect() id", id);
+    logger.log("useEffect()");
 
     const subscriptions = [];
 
     const randomValue = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
     let hasKnownPeerConnection = false;
     let peerConnectionRoleLocal = null;
+    let candidatesSubject = null;
 
     // Defer executing to avoid immediate clean up in useEffect()
     const timeoutHandler = setTimeout(() => {
@@ -70,6 +45,12 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     });
 
     subscriptions.push(
+      refPcm.current.signalingStateSubject.subscribe((signalingState) => {
+        if (signalingState === "stable") {
+          logger.log("signalingState becomes stable");
+          candidatesSubject = new ReplaySubject();
+        }
+      }),
       webSocketManager.messagesSubject
         .pipe(
           filter(
@@ -78,7 +59,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               m.type === "ConnectClient" &&
               m.fromClientId === clientId
           ),
-          tap(({ messageData }) => console.log("new message data", messageData))
+          tap(({ messageData }) => logger.log("new message data", messageData))
         )
         .subscribe(({ messageData }) => {
           function handleLeaderSetting() {
@@ -159,6 +140,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                 if (peerConnectionRoleLocal === "OFFER") {
                   break;
                 }
+                logger.log("rolling back local description");
                 obs = from(
                   Promise.all([
                     refPcm.current
@@ -185,7 +167,20 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               if (messageData.type === "offer") {
                 subscriptions.push(
                   obs
-                    .pipe(mergeMap(() => from(refPcm.current.createAnswer())))
+                    .pipe(
+                      tap(() => {
+                        subscriptions.push(
+                          candidatesSubject.subscribe((candidate) => {
+                            refPcm.current
+                              .addIceCandidate(candidate)
+                              .catch((error) =>
+                                console.error("addIceCandidate", error)
+                              );
+                          })
+                        );
+                      }),
+                      mergeMap(() => from(refPcm.current.createAnswer()))
+                    )
                     .subscribe((answer) => {
                       webSocketManager.send({
                         action: "ConnectClient",
@@ -197,9 +192,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               }
               break;
             default:
-              refPcm.current
-                .addIceCandidate(messageData)
-                .catch((error) => console.error("addIceCandidate", error));
+              // ICE candidate
+              candidatesSubject.next(messageData);
               break;
           }
         })
