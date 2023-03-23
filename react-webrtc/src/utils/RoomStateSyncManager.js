@@ -56,7 +56,7 @@ export default class RoomStateSyncManager {
     let isFetchingGapDeltas = false;
 
     this.subscriptions.push(
-      // --- Initial snapshot ---
+      // --- Fetch initial snapshot ---
       defer(() => from(getRoomSnapshot(this.roomId)))
         .pipe(
           map((data) =>
@@ -69,22 +69,22 @@ export default class RoomStateSyncManager {
           tap((snapshot) => this.logger.debug("new snapshot", snapshot.toJS()))
         )
         .subscribe((snapshot) =>
-          // Not directly subscribing to snapshotsSubject so we don't complete
-          // the snapshotsSubject.
+          // Not directly subscribing snapshotsSubject, so we don't complete
+          // the snapshotsSubject when this observable complete.
           snapshotsSubject.next(snapshot)
         ),
-      // --- Getting raw deltas from WS ---
+      // --- Subscribe to deltas from WebSocket API ---
       this.wsObservable
         .pipe(
           filter((message) => message.isDelta),
           tap((delta) => this.logger.debug("new detla from ws", delta))
         )
         .subscribe(rawDeltasSubject),
-      // --- ??? ---
+      // --- Accumulate delta to deltaListSubject ---
       deltasObservable.subscribe((delta) =>
         deltaListsSubject.next(deltaListsSubject.getValue().push(delta))
       ),
-      // --- ??? ---
+      // --- Apply delta to snapshot ---
       merge(snapshotsSubject, deltasObservable)
         .pipe(
           mergeMap(() => snapshotsSubject.pipe(take(1))),
@@ -206,6 +206,7 @@ export default class RoomStateSyncManager {
         .subscribe(snapshotsSubject)
     );
 
+    // UI can subscribe to this
     this.snapshotsObservable = snapshotsSubject.pipe(
       tap((snapshot) =>
         this.logger.debug(
@@ -214,14 +215,6 @@ export default class RoomStateSyncManager {
       ),
       shareReplay(1)
     );
-  }
-
-  log(...args) {
-    console.debug(`RoomStateSyncManager [${this.instanceId}]`, ...args);
-  }
-
-  logError(...args) {
-    console.error(`RoomStateSyncManager [${this.instanceId}]`, ...args);
   }
 
   destroy() {
