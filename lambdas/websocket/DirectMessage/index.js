@@ -10,26 +10,31 @@ function parseEvent(event) {
     requestContext: { routeKey, connectionId },
     body,
   } = event;
-  const { targetClientId, messageData } = JSON.parse(body);
+  const { toClientId, message } = JSON.parse(body);
   return {
     routeKey,
     connectionId,
-    targetClientId,
-    messageData,
+    toClientId,
+    message,
   };
 }
 
 export async function handler(event, context) {
   console.log("handling event", event);
 
-  const { routeKey, connectionId, targetClientId, messageData } =
-    parseEvent(event);
+  const {
+    routeKey,
+    connectionId: fromClientId,
+    toClientId,
+    message,
+  } = parseEvent(event);
 
   try {
-    await postToClient(apiGatewayManagementApi, targetClientId, {
+    await postToClient(apiGatewayManagementApi, toClientId, {
+      isDelta: false,
       type: routeKey,
-      fromClientId: connectionId,
-      messageData,
+      fromClientId,
+      message,
     });
   } catch (error) {
     if (error["$metadata"]?.httpStatusCode === 410) {

@@ -36,8 +36,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     const timeoutHandler = setTimeout(() => {
       webSocketManager.send({
         action: "DirectMessage",
-        targetClientId: clientId,
-        messageData: {
+        toClientId: clientId,
+        message: {
           type: "SelectingLeader",
           randomValue,
         },
@@ -59,14 +59,14 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               m.type === "DirectMessage" &&
               m.fromClientId === clientId
           ),
-          tap(({ messageData }) => logger.log("new message data", messageData))
+          tap(({ message }) => logger.log("new message data", message))
         )
-        .subscribe(({ messageData }) => {
+        .subscribe(({ message }) => {
           function handleLeaderSetting() {
             if (!hasKnownPeerConnection) {
               hasKnownPeerConnection = true;
 
-              if (randomValue > messageData.randomValue) {
+              if (randomValue > message.randomValue) {
                 peerConnectionRoleLocal = "OFFER";
                 setPeerConnectionRole("OFFER");
               } else {
@@ -76,8 +76,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
 
               webSocketManager.send({
                 action: "DirectMessage",
-                targetClientId: clientId,
-                messageData: {
+                toClientId: clientId,
+                message: {
                   type: "ConfirmingLeader",
                   randomValue,
                 },
@@ -85,7 +85,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
             }
           }
 
-          switch (messageData.type) {
+          switch (message.type) {
             case "SelectingLeader":
               handleLeaderSetting();
               break;
@@ -96,8 +96,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                 refPcm.current.localIceCandidatesSubject.subscribe((cand) =>
                   webSocketManager.send({
                     action: "DirectMessage",
-                    targetClientId: clientId,
-                    messageData: cand,
+                    toClientId: clientId,
+                    message: cand,
                   })
                 ),
                 refPcm.current.negotiationNeededSubject.subscribe(() => {
@@ -105,8 +105,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                     from(refPcm.current.createOffer()).subscribe((offer) =>
                       webSocketManager.send({
                         action: "DirectMessage",
-                        targetClientId: clientId,
-                        messageData: offer,
+                        toClientId: clientId,
+                        message: offer,
                       })
                     )
                   );
@@ -134,7 +134,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
             case "answer":
               let obs = null;
               if (
-                messageData.type === "offer" &&
+                message.type === "offer" &&
                 refPcm.current.getSignalingState() !== "stable"
               ) {
                 if (peerConnectionRoleLocal === "OFFER") {
@@ -150,21 +150,17 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                       ),
                     refPcm.current
                       .getPc()
-                      .setRemoteDescription(
-                        new RTCSessionDescription(messageData)
-                      ),
+                      .setRemoteDescription(new RTCSessionDescription(message)),
                   ])
                 );
               } else {
                 obs = from(
                   refPcm.current
                     .getPc()
-                    .setRemoteDescription(
-                      new RTCSessionDescription(messageData)
-                    )
+                    .setRemoteDescription(new RTCSessionDescription(message))
                 );
               }
-              if (messageData.type === "offer") {
+              if (message.type === "offer") {
                 subscriptions.push(
                   obs
                     .pipe(
@@ -184,8 +180,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                     .subscribe((answer) => {
                       webSocketManager.send({
                         action: "DirectMessage",
-                        targetClientId: clientId,
-                        messageData: answer,
+                        toClientId: clientId,
+                        message: answer,
                       });
                     })
                 );
@@ -193,7 +189,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               break;
             default:
               // ICE candidate
-              candidatesSubject.next(messageData);
+              candidatesSubject.next(message);
               break;
           }
         })
