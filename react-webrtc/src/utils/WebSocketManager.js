@@ -1,10 +1,9 @@
-import { Subject, tap } from "rxjs";
+import { Subject, Subscription, tap } from "rxjs";
 import { webSocket } from "rxjs/webSocket";
 import Logger from "./Logger";
 import endpoints from "../api_endpoints.json";
 
 class WebSocketManager {
-  subscriptions = [];
   openObserver = new Subject();
   closeObserver = new Subject();
   messagesSubject = new Subject();
@@ -14,14 +13,6 @@ class WebSocketManager {
 
     this.webSocketSubject = webSocket({
       url: endpoints.websocket_endpoint_url,
-      deserializer: (event) => {
-        try {
-          return JSON.parse(event.data);
-        } catch (error) {
-          this.logger.error("JSON parse error.", event.data);
-          return {};
-        }
-      },
       openObserver: {
         next: (data) => {
           this.logger.debug("connection open");
@@ -52,17 +43,18 @@ class WebSocketManager {
 
   connect() {
     this.logger.log("connect()");
-    this.subscriptions.push(
+    this.subscription?.unsubscribe();
+    this.subscription = new Subscription(() => {
+      this.logger.log("subscription disposed");
+    });
+    this.subscription.add(
       this.webSocketMessagesObservable.subscribe(this.messagesSubject)
     );
   }
 
   disconnect() {
     this.logger.log("disconnect()");
-    for (const subscription of this.subscriptions) {
-      subscription.unsubscribe();
-    }
-    this.subscriptions = [];
+    this.subscription?.unsubscribe();
   }
 
   send(data) {

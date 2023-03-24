@@ -1,4 +1,4 @@
-import { Subject, fromEvent, BehaviorSubject } from "rxjs";
+import { Subject, fromEvent, BehaviorSubject, Subscription } from "rxjs";
 import Logger from "./Logger";
 
 const WEBRTC_CONFIG = {
@@ -12,7 +12,6 @@ const WEBRTC_CONFIG = {
 
 export default class PeerConnectionManager {
   isStopped = false;
-  subscriptions = [];
   // remoteIceCandidatesSubject = new ReplaySubject();
   // remoteDescriptionSetSubject = new Subject();
   localIceCandidatesSubject = new Subject();
@@ -28,13 +27,8 @@ export default class PeerConnectionManager {
 
   destroy() {
     this.logger.log(`destroy()`);
-
     this.isStopped = true;
-
-    for (const subscription of this.subscriptions) {
-      subscription.unsubscribe();
-    }
-
+    this.subscription.unsubscribe();
     this.pc?.close();
     this.pc = null;
   }
@@ -43,41 +37,61 @@ export default class PeerConnectionManager {
     this.logger.log("creating peer connection.");
 
     this.pc = new RTCPeerConnection(WEBRTC_CONFIG);
+    this.subscription = new Subscription(() => {
+      this.logger.log("subscription disposed");
+    });
+    this.signalingStateSubject = new BehaviorSubject(this.pc.signalingState);
 
     this.logger.log(`signalingstatechange: ${this.pc.signalingState}`);
 
-    this.signalingStateSubject = new BehaviorSubject(this.pc.signalingState);
-
-    this.subscriptions.push(
+    this.subscription.add(
       fromEvent(this.pc, "signalingstatechange").subscribe(() => {
         this.logger.log(`signalingstatechange: ${this.pc.signalingState}`);
         this.signalingStateSubject.next(this.pc.signalingState);
-      }),
+      })
+    );
+
+    this.subscription.add(
       fromEvent(this.pc, "icegatheringstatechange").subscribe(() => {
         this.logger.debug(
           `onicegatheringstatechange: ${this.pc.iceGatheringState}`
         );
-      }),
+      })
+    );
+
+    this.subscription.add(
       fromEvent(this.pc, "iceconnectionstatechange").subscribe(() => {
         this.logger.debug(
           `oniceconnectionstatechange: ${this.pc.iceConnectionState}`
         );
-      }),
+      })
+    );
+
+    this.subscription.add(
       fromEvent(this.pc, "connectionstatechange").subscribe(() => {
         this.logger.debug(
           `onconnectionstatechange: ${this.pc.connectionState}`
         );
-      }),
+      })
+    );
+
+    this.subscription.add(
       fromEvent(this.pc, "negotiationneeded").subscribe(() => {
         this.logger.log(
           `negotiationneeded: signalingState = ${this.pc.signalingState}`
         );
         this.negotiationNeededSubject.next(null);
-      }),
+      })
+    );
+
+    this.subscription.add(
       fromEvent(this.pc, "track").subscribe((event) => {
         this.logger.log(`ontrack:`, event.streams, event.track);
         this.tracksSubject.next(event);
-      }),
+      })
+    );
+
+    this.subscription.add(
       fromEvent(this.pc, "icecandidate").subscribe((event) => {
         if (event.candidate == null) {
           this.logger.log(`no more ICE candidates`);
@@ -87,10 +101,11 @@ export default class PeerConnectionManager {
           this.localIceCandidatesSubject.next(event.candidate);
         }
       })
-      // this.remoteIceCandidatesSubject
-      //   .pipe(tap(() => this.logger.log("receive remote ice candidate")))
-      //   .subscribe((iceCandidate) => {})
     );
+    // this.remoteIceCandidatesSubject
+    //   .pipe(tap(() => this.logger.log("receive remote ice candidate")))
+    //   .subscribe((iceCandidate) => {})
+    // );
   }
 
   getSignalingState() {

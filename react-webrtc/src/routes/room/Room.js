@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Set } from "immutable";
-import { from, filter, BehaviorSubject } from "rxjs";
+import { from, filter, BehaviorSubject, Subscription } from "rxjs";
 import Logger from "../../utils/Logger";
 import webSocketManager from "../../utils/WebSocketManager";
 import RoomStateSyncManager from "../../utils/RoomStateSyncManager";
@@ -20,7 +20,8 @@ export default function Room({ roomId }) {
   const [clientIds, setClientIds] = useState(Set());
 
   useEffect(() => {
-    logger.log("[0] useEffect setup");
+    logger.debug("[0] useEffect setup");
+
     // Due to useEffect in React dev build executes twice on component mount,
     // we delay WebSocket connection by a small amount of time, to fix an issue
     // in Safari failing to connect when connection is close immediately before
@@ -30,33 +31,44 @@ export default function Room({ roomId }) {
     }, 200);
 
     return () => {
-      logger.log("[0] useEffect cleanup");
+      logger.debug("[0] useEffect cleanup");
       clearTimeout(timeoutHandler);
       webSocketManager.disconnect();
     };
   }, []);
 
   useEffect(() => {
-    logger.log("[1] useEffect setup");
+    logger.debug("[1] useEffect setup");
 
-    const subscriptions = [];
+    const subscription = new Subscription(() => {
+      logger.debug("[1] subscription disposed");
+    });
 
     const roomStateSyncManager = new RoomStateSyncManager(
       roomId,
       webSocketManager.messagesSubject
     );
 
-    subscriptions.push(
+    subscription.add(
       webSocketManager.openObserver.subscribe(() => {
         setWsStatus("Connected");
         webSocketManager.send({ action: "JoinRoom", roomId });
-      }),
+      })
+    );
+
+    subscription.add(
       webSocketManager.closeObserver.subscribe(() => {
         setWsStatus("Disconnected");
-      }),
+      })
+    );
+
+    subscription.add(
       webSocketManager.messagesSubject
         .pipe(filter((m) => !m.isDelta && m.type === "CurrentClientId"))
-        .subscribe(({ clientId }) => setCurrentClientId(clientId)),
+        .subscribe(({ clientId }) => setCurrentClientId(clientId))
+    );
+
+    subscription.add(
       roomStateSyncManager.snapshotsObservable.subscribe((snapshot) => {
         logger.log(
           `roomStateSyncManager.snapshotsObservable ${JSON.stringify(
@@ -69,23 +81,24 @@ export default function Room({ roomId }) {
       })
     );
 
-    logger.log("[1] useEffect setup end");
+    logger.debug("[1] useEffect setup end");
+
     return () => {
-      logger.log("[1] useEffect cleanup");
-      for (const subscription of subscriptions) {
-        subscription.unsubscribe();
-      }
+      logger.debug("[1] useEffect cleanup");
+
+      subscription.unsubscribe();
       roomStateSyncManager.destroy();
-      logger.log("[1] useEffect cleanup end");
+
+      logger.debug("[1] useEffect cleanup end");
     };
   }, [roomId]);
 
   useEffect(() => {
-    const subscriptions = [];
+    const subscription = new Subscription();
 
     let mediaStreamTmp = null;
 
-    subscriptions.push(
+    subscription.add(
       from(
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       ).subscribe({
@@ -101,12 +114,9 @@ export default function Room({ roomId }) {
     );
 
     return () => {
-      for (const subscription of subscriptions) {
-        subscription.unsubscribe();
-      }
-
       mediaStreamTmp?.getTracks().forEach((track) => track.stop());
       refLocalMediaStreamSubject.current.next(null);
+      subscription.unsubscribe();
     };
   }, []);
 
