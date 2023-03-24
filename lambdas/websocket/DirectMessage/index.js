@@ -7,11 +7,12 @@ const apiGatewayManagementApi = getApiGatewayManagement(
 
 function parseEvent(event) {
   const {
-    requestContext: { connectionId },
+    requestContext: { routeKey, connectionId },
     body,
   } = event;
   const { targetClientId, messageData } = JSON.parse(body);
   return {
+    routeKey,
     connectionId,
     targetClientId,
     messageData,
@@ -21,11 +22,12 @@ function parseEvent(event) {
 export async function handler(event, context) {
   console.log("handling event", event);
 
-  const { connectionId, targetClientId, messageData } = parseEvent(event);
+  const { routeKey, connectionId, targetClientId, messageData } =
+    parseEvent(event);
 
   try {
     await postToClient(apiGatewayManagementApi, targetClientId, {
-      type: "ConnectClient",
+      type: routeKey,
       fromClientId: connectionId,
       messageData,
     });

@@ -35,7 +35,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     // Defer executing to avoid immediate clean up in useEffect()
     const timeoutHandler = setTimeout(() => {
       webSocketManager.send({
-        action: "ConnectClient",
+        action: "DirectMessage",
         targetClientId: clientId,
         messageData: {
           type: "SelectingLeader",
@@ -56,7 +56,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
           filter(
             (m) =>
               !m.isDelta &&
-              m.type === "ConnectClient" &&
+              m.type === "DirectMessage" &&
               m.fromClientId === clientId
           ),
           tap(({ messageData }) => logger.log("new message data", messageData))
@@ -75,7 +75,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               }
 
               webSocketManager.send({
-                action: "ConnectClient",
+                action: "DirectMessage",
                 targetClientId: clientId,
                 messageData: {
                   type: "ConfirmingLeader",
@@ -95,7 +95,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
               subscriptions.push(
                 refPcm.current.localIceCandidatesSubject.subscribe((cand) =>
                   webSocketManager.send({
-                    action: "ConnectClient",
+                    action: "DirectMessage",
                     targetClientId: clientId,
                     messageData: cand,
                   })
@@ -104,7 +104,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                   subscriptions.push(
                     from(refPcm.current.createOffer()).subscribe((offer) =>
                       webSocketManager.send({
-                        action: "ConnectClient",
+                        action: "DirectMessage",
                         targetClientId: clientId,
                         messageData: offer,
                       })
@@ -183,7 +183,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                     )
                     .subscribe((answer) => {
                       webSocketManager.send({
-                        action: "ConnectClient",
+                        action: "DirectMessage",
                         targetClientId: clientId,
                         messageData: answer,
                       });

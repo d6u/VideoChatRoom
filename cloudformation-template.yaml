@@ -16,7 +16,7 @@ Parameters:
     Type: String
   LambdaSourceS3KeyJoinRoom:
     Type: String
-  LambdaSourceS3KeyConnectClient:
+  LambdaSourceS3KeyDirectMessage:
     Type: String
   LambdaSourceS3KeyRoomAction:
     Type: String
@@ -87,7 +87,7 @@ Resources:
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDefault}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDisconnect}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionJoinRoom}:*
-              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionConnectClient}:*
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionDirectMessage}:*
               - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionRoomAction}:*
   IamPolicyLambdaInteractSqs:
     Type: AWS::IAM::Policy
@@ -585,23 +585,23 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/JoinRoom
 
-  # --- WebSocket APIs route: ConnectClient ---
-  ApiGatewayRouteConnectClient:
+  # --- WebSocket APIs route: DirectMessage ---
+  ApiGatewayRouteDirectMessage:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
-      RouteKey: ConnectClient
+      RouteKey: DirectMessage
       Target: !Join
         - /
         - - integrations
-          - !Ref ApiGatewayIntegrationConnectClient
-  ApiGatewayIntegrationConnectClient:
+          - !Ref ApiGatewayIntegrationDirectMessage
+  ApiGatewayIntegrationDirectMessage:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
       IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionConnectClient.Arn}/invocations
-  LambdaFunctionConnectClient:
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionDirectMessage.Arn}/invocations
+  LambdaFunctionDirectMessage:
     Type: AWS::Lambda::Function
     Properties:
       Architectures:
@@ -611,7 +611,7 @@ Resources:
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyConnectClient
+        S3Key: !Ref LambdaSourceS3KeyDirectMessage
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
@@ -621,13 +621,13 @@ Resources:
           WEBSOCKET_API_ENDPOINT: !Sub ${ApiGatewayApiWebSocket.ApiEndpoint}/${ApiGatewayStageWebSocketStaging}
       TracingConfig:
         Mode: Active
-  LambdaPermissionConnectClient:
+  LambdaPermissionDirectMessage:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LambdaFunctionConnectClient
+      FunctionName: !Ref LambdaFunctionDirectMessage
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/ConnectClient
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApiWebSocket.ApiId}/*/DirectMessage
 
   # --- SQS ---
   SqsQueueRoomActions:

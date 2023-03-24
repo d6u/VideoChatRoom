@@ -22,7 +22,7 @@ locals {
     default         = "lambdas/websocket/default"
     disconnect      = "lambdas/websocket/disconnect"
     JoinRoom        = "lambdas/websocket/JoinRoom"
-    ConnectClient   = "lambdas/websocket/ConnectClient"
+    DirectMessage   = "lambdas/websocket/DirectMessage"
     RoomAction      = "lambdas/sqs/RoomAction"
   }
 }
@@ -72,7 +72,7 @@ resource "aws_cloudformation_stack" "gameroom_stack" {
     LambdaSourceS3KeyDisconnect      = aws_s3_object.lambda_source_s3_objects["disconnect"].key
     LambdaSourceS3KeyDefault         = aws_s3_object.lambda_source_s3_objects["default"].key
     LambdaSourceS3KeyJoinRoom        = aws_s3_object.lambda_source_s3_objects["JoinRoom"].key
-    LambdaSourceS3KeyConnectClient   = aws_s3_object.lambda_source_s3_objects["ConnectClient"].key
+    LambdaSourceS3KeyDirectMessage   = aws_s3_object.lambda_source_s3_objects["DirectMessage"].key
     LambdaSourceS3KeyRoomAction      = aws_s3_object.lambda_source_s3_objects["RoomAction"].key
   }
   template_body = file("cloudformation-template.yaml")
