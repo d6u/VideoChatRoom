@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BehaviorSubject,
   defer,
@@ -13,9 +13,9 @@ import {
 } from "rxjs";
 import classNames from "classnames";
 import { List } from "immutable";
-import Logger from "../../utils/Logger";
 import webSocketManager from "../../utils/WebSocketManager";
 import PeerConnectionManager from "../../utils/PeerConnectionManager";
+import { useConst, useLogger } from "../../components/hooks";
 
 function filterDirectMessage(clientId) {
   return function (data) {
@@ -27,26 +27,18 @@ function filterDirectMessage(clientId) {
   };
 }
 
-function useLogger(label) {
-  const logger = useRef(null);
-  if (logger.current == null) {
-    logger.current = new Logger(label);
-  }
-  return logger.current;
-}
-
 export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
   const logger = useLogger(`ClientBoxRemote(${clientId})`);
+  const localLeaderSelectionRandomValue = useConst(() =>
+    Math.floor(Math.random() * (Math.pow(2, 31) - 1))
+  );
+
   const refSeq = useRef(0);
-  const refRandomValue = useRef(null);
   const refVideo = useRef(null);
   const refPcm = useRef(null);
 
-  if (refRandomValue.current == null) {
-    refRandomValue.current = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
-  }
-
   const [stateIsPolite, setStateIsPolite] = useState(null);
+  const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
     refPcm.current = new PeerConnectionManager();
@@ -56,17 +48,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     };
   }, [clientId]);
 
-  useEffect(() => {
-    logger.debug(`useEffect() setup. clientId = ${clientId}`);
-
-    const subscription = new Subscription();
-
-    const remoteMessageListsSubject = new BehaviorSubject(List());
-    let prevSeq = -1;
-    let hasKnownPeerConnectionRole = false;
-    let isPolite = false;
-
-    function send(message) {
+  const send = useCallback(
+    (message) => {
       const messageWithSeq = {
         ...message,
         seq: refSeq.current++,
@@ -80,13 +63,25 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
         toClientId: clientId,
         message: messageWithSeq,
       });
-    }
+    },
+    [clientId, webSocketManager]
+  );
+
+  useEffect(() => {
+    logger.debug(`useEffect() setup. clientId = ${clientId}`);
+
+    const subscription = new Subscription();
+
+    const remoteMessageListsSubject = new BehaviorSubject(List());
+    let prevSeq = -1;
+    let hasKnownPeerConnectionRole = false;
+    let isPolite = false;
 
     // Defer executing to avoid immediate clean up in useEffect()
     const timeoutHandler = setTimeout(() => {
       send({
         type: "SelectingLeader",
-        randomValue: refRandomValue.current,
+        randomValue: localLeaderSelectionRandomValue,
       });
     }, 200);
 
@@ -162,7 +157,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
             if (!hasKnownPeerConnectionRole) {
               hasKnownPeerConnectionRole = true;
 
-              if (refRandomValue.current > randomValue) {
+              if (localLeaderSelectionRandomValue > randomValue) {
                 isPolite = false;
               } else {
                 isPolite = true;
@@ -216,7 +211,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
 
               send({
                 type: "ConfirmingLeader",
-                randomValue: refRandomValue.current,
+                randomValue: localLeaderSelectionRandomValue,
               });
             } else {
               logger.debug(`${type} has no effect`);
@@ -301,13 +296,21 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
         </code>
       </div>
       <video
+        key={clientId}
         ref={refVideo}
         width={320}
         height={240}
-        muted={true}
+        muted={isMuted}
         autoPlay
         playsInline
       />
+      <button
+        onClick={() => {
+          setIsMuted((isMuted) => !isMuted);
+        }}
+      >
+        {isMuted ? "Unmute" : "Mute"}
+      </button>
     </div>
   );
 }
