@@ -3,6 +3,7 @@ import {
   defer,
   EMPTY,
   filter,
+  first,
   from,
   map,
   merge,
@@ -12,25 +13,15 @@ import {
   shareReplay,
   Subject,
   Subscription,
-  take,
   tap,
+  withLatestFrom,
   zipWith,
 } from "rxjs";
-import { Record, Set, List } from "immutable";
+import { Set, List } from "immutable";
 import { getRoomSnapshot, getRoomDeltas } from "./Api";
 import Logger from "./Logger";
-
-const Snapshot = Record({
-  roomId: "",
-  seq: -1,
-  clientIds: Set(),
-});
-
-const Delta = Record({
-  type: "",
-  seq: -1,
-  clientId: "",
-});
+import Snapshot from "../models/Snapshot";
+import Delta from "../models/Delta";
 
 export default class RoomStateSyncManager {
   constructor(roomId, wsObservable) {
@@ -71,7 +62,7 @@ export default class RoomStateSyncManager {
     const snapshotsSubject = new ReplaySubject(1);
 
     const deltasObservable = rawDeltasSubject.pipe(
-      map((data) => Delta(data)),
+      map(Delta),
       tap((delta) => {
         this.logger.debug("new delta", delta.toJS());
       }),
@@ -100,8 +91,8 @@ export default class RoomStateSyncManager {
           })
         )
         .subscribe((snapshot) =>
-          // Not directly subscribing snapshotsSubject, so we don't complete
-          // the snapshotsSubject when this observable complete.
+          // Making sure we don't complete the subject when this
+          // observable complete.
           snapshotsSubject.next(snapshot)
         )
     );
@@ -120,57 +111,57 @@ export default class RoomStateSyncManager {
 
     // --- Accumulate delta to deltaListSubject ---
     this.subscription.add(
-      deltasObservable.subscribe((delta) =>
-        deltaListsSubject.next(deltaListsSubject.getValue().push(delta))
-      )
+      deltasObservable
+        .pipe(
+          withLatestFrom(deltaListsSubject),
+          map(([delta, deltas]) => deltas.push(delta))
+        )
+        .subscribe(deltaListsSubject)
     );
 
     // --- Apply delta to snapshot ---
     this.subscription.add(
       merge(snapshotsSubject, deltasObservable)
         .pipe(
-          mergeMap(() => snapshotsSubject.pipe(take(1))),
-          map((snapshot) => {
+          mergeMap(() => snapshotsSubject.pipe(first())),
+          withLatestFrom(deltaListsSubject),
+          map(([snapshot, deltas]) => {
             return [
-              // TODO: Making sure there isn't any duplicates
-              deltaListsSubject
-                .getValue()
-                .sortBy((d) => d.seq)
-                .filter((d) => d.seq > snapshot.seq),
               snapshot,
+              // TODO: Making sure there isn't any duplicates
+              deltas.sortBy((d) => d.seq).filter((d) => d.seq > snapshot.seq),
             ];
           }),
-          tap(([deltas, snapshot]) => {
+          tap(([snapshot, deltas]) => {
             const snapshotStr = JSON.stringify(snapshot.toJS(), null, 4);
             const deltasStr = JSON.stringify(deltas.toJS(), null, 4);
             this.logger.debug(
               `[1] snapshot = ${snapshotStr}\ndeltas = ${deltasStr}`
             );
           }),
-          mergeMap(([deltas, snapshot]) => {
+          mergeMap(([snapshot, deltas]) => {
             if (deltas.size === 0) {
               this.logger.debug("not delta in delta list");
               deltaListsSubject.next(List());
               return EMPTY;
             }
 
-            if (deltas.getIn([0, "seq"]) - snapshot.seq === 1) {
-              const nextDeltas = [deltas.get(0)];
-              deltas = deltas.rest();
+            if (deltas.getIn([0, "seq"]) === snapshot.seq + 1) {
+              let prevIndex = 0;
 
-              // Making sure there isn't any gap in the delta sequence.
-              while (!deltas.isEmpty()) {
-                const delta = deltas.get(0);
-                if (delta.seq - nextDeltas[nextDeltas.length - 1].seq > 1) {
+              for (let i = 1; i < deltas.size; i++) {
+                if (
+                  deltas.getIn([i, "seq"]) !==
+                  deltas.getIn([prevIndex, "seq"]) + 1
+                ) {
                   break;
                 }
-                nextDeltas.push(delta);
-                deltas = deltas.rest();
+                prevIndex = i;
               }
 
               this.logger.debug("passing delta down the stream");
-              deltaListsSubject.next(deltas);
-              return from(nextDeltas);
+              deltaListsSubject.next(deltas.slice(prevIndex + 1));
+              return from(deltas.slice(0, prevIndex + 1));
             }
 
             if (!isFetchingGapDeltas) {
@@ -193,7 +184,11 @@ export default class RoomStateSyncManager {
                       this.logger.log("new detla from http", delta);
                     })
                   )
-                  .subscribe((data) => rawDeltasSubject.next(data))
+                  .subscribe((data) => {
+                    // Making sure we don't complete the subject when this
+                    // observable complete.
+                    rawDeltasSubject.next(data);
+                  })
               );
             }
 

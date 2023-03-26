@@ -7,9 +7,9 @@ import {
   from,
   map,
   mergeMap,
-  ReplaySubject,
   Subscription,
   tap,
+  withLatestFrom,
 } from "rxjs";
 import classNames from "classnames";
 import { List } from "immutable";
@@ -99,11 +99,9 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     subscription.add(
       remoteMessagesObservable
         .pipe(
-          map(() =>
-            remoteMessageListsSubject
-              .getValue()
-              .sortBy((m) => m.seq)
-              .filter((m) => m.seq > prevSeq)
+          withLatestFrom(remoteMessageListsSubject),
+          map(([, messages]) =>
+            messages.sortBy((m) => m.seq).filter((m) => m.seq > prevSeq)
           ),
           mergeMap((messages) => {
             if (
