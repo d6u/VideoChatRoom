@@ -17,8 +17,6 @@ import Logger from "../../utils/Logger";
 import webSocketManager from "../../utils/WebSocketManager";
 import PeerConnectionManager from "../../utils/PeerConnectionManager";
 
-const logger = new Logger("ClientBoxRemote");
-
 function filterDirectMessage(clientId) {
   return function (data) {
     return (
@@ -29,7 +27,16 @@ function filterDirectMessage(clientId) {
   };
 }
 
+function useLogger(label) {
+  const logger = useRef(null);
+  if (logger.current == null) {
+    logger.current = new Logger(label);
+  }
+  return logger.current;
+}
+
 export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
+  const logger = useLogger(`ClientBoxRemote(${clientId})`);
   const refSeq = useRef(0);
   const refRandomValue = useRef(null);
   const refVideo = useRef(null);
@@ -202,6 +209,10 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
                     send({ type: "Offer", description });
                   })
               );
+
+              // Don't send out SelectingLeader if we have already moved to
+              // ConfirmingLeader
+              clearTimeout(timeoutHandler);
 
               send({
                 type: "ConfirmingLeader",
