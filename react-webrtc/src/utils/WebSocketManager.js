@@ -58,7 +58,7 @@ class WebSocketManager {
   }
 
   send(data) {
-    this.logger.debug("sending message", JSON.stringify(data));
+    this.logger.debug("sending message:", JSON.stringify(data, null, 4));
     this.webSocketSubject.next(data);
   }
 }

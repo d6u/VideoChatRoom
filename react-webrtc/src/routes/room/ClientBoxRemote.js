@@ -1,21 +1,48 @@
 import { useEffect, useRef, useState } from "react";
-import { filter, from, mergeMap, ReplaySubject, tap } from "rxjs";
+import {
+  BehaviorSubject,
+  defer,
+  EMPTY,
+  filter,
+  from,
+  map,
+  mergeMap,
+  ReplaySubject,
+  Subscription,
+  tap,
+} from "rxjs";
 import classNames from "classnames";
+import { List } from "immutable";
 import Logger from "../../utils/Logger";
 import webSocketManager from "../../utils/WebSocketManager";
 import PeerConnectionManager from "../../utils/PeerConnectionManager";
 
 const logger = new Logger("ClientBoxRemote");
 
+function filterDirectMessage(clientId) {
+  return function (data) {
+    return (
+      !data.isDelta &&
+      data.type === "DirectMessage" &&
+      data.fromClientId === clientId
+    );
+  };
+}
+
 export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
+  const refSeq = useRef(0);
+  const refRandomValue = useRef(null);
   const refVideo = useRef(null);
   const refPcm = useRef(null);
 
-  const [peerConnectionRole, setPeerConnectionRole] = useState("UNKNOWN");
+  if (refRandomValue.current == null) {
+    refRandomValue.current = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
+  }
+
+  const [stateIsPolite, setStateIsPolite] = useState(null);
 
   useEffect(() => {
-    refPcm.current = new PeerConnectionManager(clientId);
-    refPcm.current.createConnection();
+    refPcm.current = new PeerConnectionManager();
 
     return () => {
       refPcm.current.destroy();
@@ -23,184 +50,222 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
   }, [clientId]);
 
   useEffect(() => {
-    logger.log("useEffect()");
+    logger.debug(`useEffect() setup. clientId = ${clientId}`);
 
-    const subscriptions = [];
+    const subscription = new Subscription();
 
-    const randomValue = Math.floor(Math.random() * (Math.pow(2, 31) - 1));
-    let hasKnownPeerConnection = false;
-    let peerConnectionRoleLocal = null;
-    let candidatesSubject = null;
+    const remoteMessageListsSubject = new BehaviorSubject(List());
+    let prevSeq = -1;
+    let hasKnownPeerConnectionRole = false;
+    let isPolite = false;
 
-    // Defer executing to avoid immediate clean up in useEffect()
-    const timeoutHandler = setTimeout(() => {
+    function send(message) {
+      const messageWithSeq = {
+        ...message,
+        seq: refSeq.current++,
+      };
+      logger.log(
+        `==> [${messageWithSeq.seq}] [${messageWithSeq.type}]:`,
+        messageWithSeq
+      );
       webSocketManager.send({
         action: "DirectMessage",
         toClientId: clientId,
-        message: {
-          type: "SelectingLeader",
-          randomValue,
-        },
+        message: messageWithSeq,
       });
-    });
+    }
 
-    subscriptions.push(
-      refPcm.current.signalingStateSubject.subscribe((signalingState) => {
-        if (signalingState === "stable") {
-          logger.log("signalingState becomes stable");
-          candidatesSubject = new ReplaySubject();
-        }
-      }),
-      webSocketManager.messagesSubject
+    // Defer executing to avoid immediate clean up in useEffect()
+    const timeoutHandler = setTimeout(() => {
+      send({
+        type: "SelectingLeader",
+        randomValue: refRandomValue.current,
+      });
+    }, 200);
+
+    const remoteMessagesObservable = webSocketManager.messagesSubject.pipe(
+      filter(filterDirectMessage(clientId)),
+      map((data) => data.message)
+    );
+
+    subscription.add(
+      remoteMessagesObservable.subscribe((message) => {
+        remoteMessageListsSubject.next(
+          remoteMessageListsSubject.getValue().push(message)
+        );
+      })
+    );
+
+    subscription.add(
+      remoteMessagesObservable
         .pipe(
-          filter(
-            (m) =>
-              !m.isDelta &&
-              m.type === "DirectMessage" &&
-              m.fromClientId === clientId
+          map(() =>
+            remoteMessageListsSubject
+              .getValue()
+              .sortBy((m) => m.seq)
+              .filter((m) => m.seq > prevSeq)
           ),
-          tap(({ message }) => logger.log("new message data", message))
-        )
-        .subscribe(({ message }) => {
-          function handleLeaderSetting() {
-            if (!hasKnownPeerConnection) {
-              hasKnownPeerConnection = true;
-
-              if (randomValue > message.randomValue) {
-                peerConnectionRoleLocal = "OFFER";
-                setPeerConnectionRole("OFFER");
-              } else {
-                peerConnectionRoleLocal = "ANSWER";
-                setPeerConnectionRole("ANSWER");
-              }
-
-              webSocketManager.send({
-                action: "DirectMessage",
-                toClientId: clientId,
-                message: {
-                  type: "ConfirmingLeader",
-                  randomValue,
-                },
-              });
+          mergeMap((messages) => {
+            if (
+              (prevSeq === -1 &&
+                messages.get(0).seq !== 0 &&
+                messages.get(0).seq !== 1) ||
+              messages.get(0).seq !== prevSeq + 1
+            ) {
+              logger.warn(
+                "message sequence is neither 0, 1, nor right after prevSeq.",
+                JSON.stringify(messages.toJS(), null, 4)
+              );
+              return EMPTY;
             }
-          }
 
-          switch (message.type) {
-            case "SelectingLeader":
-              handleLeaderSetting();
-              break;
-            case "ConfirmingLeader":
-              handleLeaderSetting();
+            let prevIndex = 0;
 
-              subscriptions.push(
-                refPcm.current.localIceCandidatesSubject.subscribe((cand) =>
-                  webSocketManager.send({
-                    action: "DirectMessage",
-                    toClientId: clientId,
-                    message: cand,
-                  })
-                ),
-                refPcm.current.negotiationNeededSubject.subscribe(() => {
-                  subscriptions.push(
-                    from(refPcm.current.createOffer()).subscribe((offer) =>
-                      webSocketManager.send({
-                        action: "DirectMessage",
-                        toClientId: clientId,
-                        message: offer,
-                      })
-                    )
-                  );
-                }),
+            for (let i = 1; i < messages.size; i++) {
+              if (messages.get(i).seq !== messages.get(prevIndex).seq + 1) {
+                break;
+              }
+              prevIndex = i;
+            }
+
+            remoteMessageListsSubject.next(messages.slice(prevIndex + 1));
+            return from(messages.slice(0, prevIndex + 1));
+          }),
+          tap((message) => {
+            logger.log(`[${message.seq}] <== [${message.type}]:`, message);
+          })
+        )
+        .subscribe(({ seq, type, randomValue, description, candidate }) => {
+          prevSeq = seq;
+
+          if (type === "SelectingLeader" || type === "ConfirmingLeader") {
+            if (!hasKnownPeerConnectionRole) {
+              hasKnownPeerConnectionRole = true;
+
+              if (refRandomValue.current > randomValue) {
+                isPolite = false;
+              } else {
+                isPolite = true;
+              }
+              setStateIsPolite(isPolite);
+
+              refPcm.current.createConnection();
+
+              subscription.add(
                 refPcm.current.tracksSubject.subscribe((event) => {
+                  logger.debug("remote stream avaiable", event.streams[0]);
+                  logger.debug("remote track avaiable", event.track);
+
                   if (event.streams != null && event.streams[0] != null) {
                     refVideo.current.srcObject = event.streams[0];
                   } else {
                     if (refVideo.current.srcObject == null) {
+                      logger.debug("video doesn't have srcObject");
                       refVideo.current.srcObject = new MediaStream();
                     }
                     refVideo.current.srcObject.addTrack(event.track);
                   }
-                }),
-                localMediaStreamSubject.subscribe((mediaStream) => {
-                  if (mediaStream != null) {
-                    mediaStream.getTracks().forEach((track) => {
-                      refPcm.current.addTrack(track, mediaStream);
-                    });
-                  }
                 })
               );
-              break;
-            case "offer":
-            case "answer":
-              let obs = null;
+
+              logger.debug("subscribing to localIceCandidatesSubject");
+              subscription.add(
+                refPcm.current.localIceCandidatesSubject.subscribe(
+                  (candidate) => {
+                    logger.debug("local ice candidate available");
+                    send({ type: "IceCandidate", candidate });
+                  }
+                )
+              );
+
+              subscription.add(
+                refPcm.current.negotiationNeededSubject
+                  .pipe(mergeMap(() => refPcm.current.createOfferObservable()))
+                  .subscribe((description) => {
+                    logger.debug(
+                      "negotiation needed, sending offer",
+                      description
+                    );
+                    send({ type: "Offer", description });
+                  })
+              );
+
+              send({
+                type: "ConfirmingLeader",
+                randomValue: refRandomValue.current,
+              });
+            } else {
+              logger.debug(`${type} has no effect`);
+            }
+          }
+
+          if (type === "ConfirmingLeader") {
+            logger.debug("subscribing to localMediaStreamSubject");
+            subscription.add(
+              localMediaStreamSubject.subscribe((mediaStream) => {
+                logger.debug("local MediaStream updated", mediaStream);
+                if (mediaStream != null) {
+                  mediaStream.getTracks().forEach((track) => {
+                    logger.debug("local track", track);
+                    refPcm.current.addTrack(track, mediaStream);
+                  });
+                }
+              })
+            );
+          }
+
+          if (type === "Offer" || type === "Answer") {
+            defer(() => {
+              logger.debug(
+                `received remote description:`,
+                `type = ${type}`,
+                `is polite = ${isPolite}`
+              );
               if (
-                message.type === "offer" &&
+                type === "Offer" &&
                 refPcm.current.getSignalingState() !== "stable"
               ) {
-                if (peerConnectionRoleLocal === "OFFER") {
-                  break;
+                if (!isPolite) {
+                  return EMPTY;
                 }
-                logger.log("rolling back local description");
-                obs = from(
-                  Promise.all([
-                    refPcm.current
-                      .getPc()
-                      .setLocalDescription(
-                        new RTCSessionDescription({ type: "rollback" })
-                      ),
-                    refPcm.current
-                      .getPc()
-                      .setRemoteDescription(new RTCSessionDescription(message)),
-                  ])
+
+                logger.debug(
+                  "setting remote description and rollback local description"
                 );
+
+                return from(refPcm.current.setRemoteDescription(description));
               } else {
-                obs = from(
-                  refPcm.current
-                    .getPc()
-                    .setRemoteDescription(new RTCSessionDescription(message))
+                logger.debug(
+                  "setting remote description without rollback local description"
                 );
+                return from(refPcm.current.setRemoteDescription(description));
               }
-              if (message.type === "offer") {
-                subscriptions.push(
-                  obs
-                    .pipe(
-                      tap(() => {
-                        subscriptions.push(
-                          candidatesSubject.subscribe((candidate) => {
-                            refPcm.current
-                              .addIceCandidate(candidate)
-                              .catch((error) =>
-                                console.error("addIceCandidate", error)
-                              );
-                          })
-                        );
-                      }),
-                      mergeMap(() => from(refPcm.current.createAnswer()))
-                    )
-                    .subscribe((answer) => {
-                      webSocketManager.send({
-                        action: "DirectMessage",
-                        toClientId: clientId,
-                        message: answer,
-                      });
-                    })
-                );
-              }
-              break;
-            default:
-              // ICE candidate
-              candidatesSubject.next(message);
-              break;
+            })
+              .pipe(
+                mergeMap(() => {
+                  if (type === "Offer") {
+                    return refPcm.current.createAnswerObservable();
+                  }
+
+                  return EMPTY;
+                })
+              )
+              .subscribe((description) => {
+                logger.debug("sending answer", description);
+                send({ type: "Answer", description });
+              });
+          }
+
+          if (type === "IceCandidate") {
+            refPcm.current.addIceCandidate(candidate);
           }
         })
     );
 
     return () => {
-      for (const subscription of subscriptions) {
-        subscription.unsubscribe();
-      }
-
+      logger.debug(`useEffect() clean up. clientId = ${clientId}`);
       clearTimeout(timeoutHandler);
+      subscription.unsubscribe();
     };
   }, [clientId, localMediaStreamSubject]);
 
@@ -208,7 +273,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     <div className={classNames({ "Room_single-video-container": true })}>
       <div>
         <code>
-          (REMOTE) {`(${peerConnectionRole})`} {clientId}
+          (REMOTE) {`(${stateIsPolite})`} {clientId}
         </code>
       </div>
       <video
