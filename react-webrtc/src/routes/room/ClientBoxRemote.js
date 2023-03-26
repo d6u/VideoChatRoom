@@ -104,16 +104,31 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
             messages.sortBy((m) => m.seq).filter((m) => m.seq > prevSeq)
           ),
           mergeMap((messages) => {
-            if (
-              (prevSeq === -1 &&
-                messages.get(0).seq !== 0 &&
-                messages.get(0).seq !== 1) ||
-              messages.get(0).seq !== prevSeq + 1
-            ) {
-              logger.warn(
-                "message sequence is neither 0, 1, nor right after prevSeq.",
-                JSON.stringify(messages.toJS(), null, 4)
-              );
+            let hasTheRightSequence = false;
+            if (prevSeq === -1) {
+              if (messages.get(0).seq === 0 || messages.get(0).seq === 1) {
+                hasTheRightSequence = true;
+              } else {
+                logger.warn(
+                  `first message's seq doesn't start with 0 or 1. (prevSeq: ${prevSeq})`,
+                  JSON.stringify(messages.toJS(), null, 4)
+                );
+              }
+            } else {
+              if (
+                messages.get(0).seq > 0 &&
+                messages.get(0).seq === prevSeq + 1
+              ) {
+                hasTheRightSequence = true;
+              } else {
+                logger.warn(
+                  `first message's seq wasn't right after prevSeq ${prevSeq}.`,
+                  JSON.stringify(messages.toJS(), null, 4)
+                );
+              }
+            }
+
+            if (!hasTheRightSequence) {
               return EMPTY;
             }
 
