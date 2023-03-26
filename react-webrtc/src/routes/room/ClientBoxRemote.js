@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  BehaviorSubject,
   defer,
   EMPTY,
   filter,
@@ -9,13 +8,12 @@ import {
   mergeMap,
   Subscription,
   tap,
-  withLatestFrom,
 } from "rxjs";
 import classNames from "classnames";
-import { List } from "immutable";
 import webSocketManager from "../../utils/WebSocketManager";
 import PeerConnectionManager from "../../utils/PeerConnectionManager";
 import { useConst, useLogger } from "../../components/hooks";
+import { sort } from "../../utils/operators";
 
 function filterDirectMessage(clientId) {
   return function (data) {
@@ -64,7 +62,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
         message: messageWithSeq,
       });
     },
-    [clientId, webSocketManager]
+    [clientId, logger]
   );
 
   useEffect(() => {
@@ -72,8 +70,6 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
 
     const subscription = new Subscription();
 
-    const remoteMessageListsSubject = new BehaviorSubject(List());
-    let prevSeq = -1;
     let hasKnownPeerConnectionRole = false;
     let isPolite = false;
 
@@ -91,68 +87,14 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     );
 
     subscription.add(
-      remoteMessagesObservable.subscribe((message) => {
-        remoteMessageListsSubject.next(
-          remoteMessageListsSubject.getValue().push(message)
-        );
-      })
-    );
-
-    subscription.add(
       remoteMessagesObservable
         .pipe(
-          withLatestFrom(remoteMessageListsSubject),
-          map(([, messages]) =>
-            messages.sortBy((m) => m.seq).filter((m) => m.seq > prevSeq)
-          ),
-          mergeMap((messages) => {
-            let hasTheRightSequence = false;
-            if (prevSeq === -1) {
-              if (messages.get(0).seq === 0 || messages.get(0).seq === 1) {
-                hasTheRightSequence = true;
-              } else {
-                logger.warn(
-                  `first message's seq doesn't start with 0 or 1. (prevSeq: ${prevSeq})`,
-                  JSON.stringify(messages.toJS(), null, 4)
-                );
-              }
-            } else {
-              if (
-                messages.get(0).seq > 0 &&
-                messages.get(0).seq === prevSeq + 1
-              ) {
-                hasTheRightSequence = true;
-              } else {
-                logger.warn(
-                  `first message's seq wasn't right after prevSeq ${prevSeq}.`,
-                  JSON.stringify(messages.toJS(), null, 4)
-                );
-              }
-            }
-
-            if (!hasTheRightSequence) {
-              return EMPTY;
-            }
-
-            let prevIndex = 0;
-
-            for (let i = 1; i < messages.size; i++) {
-              if (messages.get(i).seq !== messages.get(prevIndex).seq + 1) {
-                break;
-              }
-              prevIndex = i;
-            }
-
-            remoteMessageListsSubject.next(messages.slice(prevIndex + 1));
-            return from(messages.slice(0, prevIndex + 1));
-          }),
+          sort({ initialSeq: -1, seqSelector: (message) => message.seq }),
           tap((message) => {
             logger.log(`[${message.seq}] <== [${message.type}]:`, message);
           })
         )
-        .subscribe(({ seq, type, randomValue, description, candidate }) => {
-          prevSeq = seq;
-
+        .subscribe(({ type, randomValue, description, candidate }) => {
           if (type === "SelectingLeader" || type === "ConfirmingLeader") {
             if (!hasKnownPeerConnectionRole) {
               hasKnownPeerConnectionRole = true;
@@ -286,7 +228,13 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
       clearTimeout(timeoutHandler);
       subscription.unsubscribe();
     };
-  }, [clientId, localMediaStreamSubject]);
+  }, [
+    clientId,
+    localMediaStreamSubject,
+    send,
+    logger,
+    localLeaderSelectionRandomValue,
+  ]);
 
   return (
     <div className={classNames({ "Room_single-video-container": true })}>
