@@ -39,6 +39,11 @@ export function sort({ initialSeq, seqSelector }) {
                 .filter((message) => seqSelector(message) > prevSeq)
             ),
             mergeMap((list) => {
+              if (list.size === 0) {
+                messagesListSubject.next(list);
+                return EMPTY;
+              }
+
               let hasTheRightSequence = false;
               if (prevSeq === -1) {
                 if (

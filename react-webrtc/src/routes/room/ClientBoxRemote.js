@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  concatMap,
   defer,
   EMPTY,
   filter,
@@ -92,135 +93,155 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
           sort({ initialSeq: -1, seqSelector: (message) => message.seq }),
           tap((message) => {
             logger.log(`[${message.seq}] <== [${message.type}]:`, message);
-          })
-        )
-        .subscribe(({ type, randomValue, description, candidate }) => {
-          if (type === "SelectingLeader" || type === "ConfirmingLeader") {
-            if (!hasKnownPeerConnectionRole) {
-              hasKnownPeerConnectionRole = true;
-
-              if (localLeaderSelectionRandomValue > randomValue) {
-                isPolite = false;
-              } else {
-                isPolite = true;
-              }
-              setStateIsPolite(isPolite);
-
-              refPcm.current.createConnection();
-
-              subscription.add(
-                refPcm.current.tracksSubject.subscribe((event) => {
-                  logger.debug("remote stream avaiable", event.streams[0]);
-                  logger.debug("remote track avaiable", event.track);
-
-                  if (event.streams != null && event.streams[0] != null) {
-                    refVideo.current.srcObject = event.streams[0];
-                  } else {
-                    if (refVideo.current.srcObject == null) {
-                      logger.debug("video doesn't have srcObject");
-                      refVideo.current.srcObject = new MediaStream();
-                    }
-                    refVideo.current.srcObject.addTrack(event.track);
-                  }
-                })
-              );
-
-              logger.debug("subscribing to localIceCandidatesSubject");
-              subscription.add(
-                refPcm.current.localIceCandidatesSubject.subscribe(
-                  (candidate) => {
-                    logger.debug("local ice candidate available");
-                    send({ type: "IceCandidate", candidate });
-                  }
-                )
-              );
-
-              subscription.add(
-                refPcm.current.negotiationNeededSubject
-                  .pipe(mergeMap(() => refPcm.current.createOfferObservable()))
-                  .subscribe((description) => {
-                    logger.debug(
-                      "negotiation needed, sending offer",
-                      description
-                    );
-                    send({ type: "Offer", description });
-                  })
-              );
-
-              // Don't send out SelectingLeader if we have already moved to
-              // ConfirmingLeader
-              clearTimeout(timeoutHandler);
-
-              send({
-                type: "ConfirmingLeader",
-                randomValue: localLeaderSelectionRandomValue,
-              });
-            } else {
-              logger.debug(`${type} has no effect`);
-            }
-          }
-
-          if (type === "ConfirmingLeader") {
-            logger.debug("subscribing to localMediaStreamSubject");
-            subscription.add(
-              localMediaStreamSubject.subscribe((mediaStream) => {
-                logger.debug("local MediaStream updated", mediaStream);
-                if (mediaStream != null) {
-                  mediaStream.getTracks().forEach((track) => {
-                    logger.debug("local track", track);
-                    refPcm.current.addTrack(track, mediaStream);
-                  });
-                }
-              })
-            );
-          }
-
-          if (type === "Offer" || type === "Answer") {
+          }),
+          concatMap(({ seq, type, randomValue, description, candidate }) =>
             defer(() => {
-              logger.debug(
-                `received remote description:`,
-                `type = ${type}`,
-                `is polite = ${isPolite}`
-              );
-              if (
-                type === "Offer" &&
-                refPcm.current.getSignalingState() !== "stable"
-              ) {
-                if (!isPolite) {
-                  return EMPTY;
+              logger.log(`[${seq}] <== [${type}]: executing...`);
+
+              if (type === "SelectingLeader" || type === "ConfirmingLeader") {
+                if (!hasKnownPeerConnectionRole) {
+                  hasKnownPeerConnectionRole = true;
+
+                  if (localLeaderSelectionRandomValue > randomValue) {
+                    isPolite = false;
+                  } else {
+                    isPolite = true;
+                  }
+                  setStateIsPolite(isPolite);
+
+                  refPcm.current.createConnection();
+
+                  subscription.add(
+                    refPcm.current.tracksSubject.subscribe((event) => {
+                      logger.debug("remote stream avaiable", event.streams[0]);
+                      logger.debug("remote track avaiable", event.track);
+
+                      if (event.streams != null && event.streams[0] != null) {
+                        refVideo.current.srcObject = event.streams[0];
+                      } else {
+                        if (refVideo.current.srcObject == null) {
+                          logger.debug("video doesn't have srcObject");
+                          refVideo.current.srcObject = new MediaStream();
+                        }
+                        refVideo.current.srcObject.addTrack(event.track);
+                      }
+                    })
+                  );
+
+                  logger.debug("subscribing to localIceCandidatesSubject");
+                  subscription.add(
+                    refPcm.current.localIceCandidatesSubject.subscribe(
+                      (candidate) => {
+                        logger.debug("local ice candidate available");
+                        send({ type: "IceCandidate", candidate });
+                      }
+                    )
+                  );
+
+                  subscription.add(
+                    refPcm.current.negotiationNeededSubject
+                      .pipe(
+                        mergeMap(() => refPcm.current.createOfferObservable())
+                      )
+                      .subscribe((description) => {
+                        logger.debug(
+                          "negotiation needed, sending offer",
+                          description
+                        );
+                        send({ type: "Offer", description });
+                      })
+                  );
+
+                  // Don't send out SelectingLeader if we have already moved to
+                  // ConfirmingLeader
+                  clearTimeout(timeoutHandler);
+
+                  send({
+                    type: "ConfirmingLeader",
+                    randomValue: localLeaderSelectionRandomValue,
+                  });
+                } else {
+                  logger.debug(`${type} has no effect`);
                 }
-
-                logger.debug(
-                  "setting remote description and rollback local description"
-                );
-
-                return from(refPcm.current.setRemoteDescription(description));
-              } else {
-                logger.debug(
-                  "setting remote description without rollback local description"
-                );
-                return from(refPcm.current.setRemoteDescription(description));
               }
-            })
-              .pipe(
-                mergeMap(() => {
-                  if (type === "Offer") {
-                    return refPcm.current.createAnswerObservable();
+
+              if (type === "ConfirmingLeader") {
+                logger.debug("subscribing to localMediaStreamSubject");
+                subscription.add(
+                  localMediaStreamSubject.subscribe((mediaStream) => {
+                    logger.debug("local MediaStream updated", mediaStream);
+                    if (mediaStream != null) {
+                      mediaStream.getTracks().forEach((track) => {
+                        logger.debug("local track", track);
+                        refPcm.current.addTrack(track, mediaStream);
+                      });
+                    }
+                  })
+                );
+              }
+
+              if (type === "Offer" || type === "Answer") {
+                logger.log(
+                  `received remote description:`,
+                  `type = ${type}`,
+                  `is polite = ${isPolite}`,
+                  `signaling state = ${refPcm.current.getSignalingState()}`
+                );
+
+                if (
+                  type === "Offer" &&
+                  refPcm.current.getSignalingState() !== "stable"
+                ) {
+                  if (!isPolite) {
+                    return EMPTY;
                   }
 
-                  return EMPTY;
-                })
-              )
-              .subscribe((description) => {
-                logger.debug("sending answer", description);
-                send({ type: "Answer", description });
-              });
-          }
+                  logger.log(
+                    "setting remote description and rollback local description"
+                  );
 
-          if (type === "IceCandidate") {
-            refPcm.current.addIceCandidate(candidate);
-          }
-        })
+                  return refPcm.current
+                    .setRemoteDescription(description)
+                    .then(() => {
+                      if (type === "Offer") {
+                        return refPcm.current.createAnswer();
+                      }
+                    })
+                    .then((description) => {
+                      if (description != null) {
+                        logger.debug("sending answer", description);
+                        send({ type: "Answer", description });
+                      }
+                    });
+                } else {
+                  logger.log(
+                    "setting remote description without rollback local description"
+                  );
+                  return refPcm.current
+                    .setRemoteDescription(description)
+                    .then(() => {
+                      if (type === "Offer") {
+                        return refPcm.current.createAnswer();
+                      }
+                    })
+                    .then((description) => {
+                      if (description != null) {
+                        logger.debug("sending answer", description);
+                        send({ type: "Answer", description });
+                      }
+                    });
+                }
+              }
+
+              if (type === "IceCandidate") {
+                refPcm.current.addIceCandidate(candidate);
+              }
+
+              return EMPTY;
+            })
+          )
+        )
+        .subscribe(() => {})
     );
 
     return () => {
