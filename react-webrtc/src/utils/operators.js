@@ -1,51 +1,74 @@
+import { List } from "immutable";
 import {
-  BehaviorSubject,
   EMPTY,
+  Observable,
+  Subscription,
+  first,
   from,
   map,
   mergeMap,
-  Observable,
-  Subscription,
+  of,
+  share,
   tap,
-  withLatestFrom,
 } from "rxjs";
-import { List } from "immutable";
+
 import Logger from "./Logger";
 
-export function sort({ initialSeq, seqSelector }) {
+export function sort({
+  initialSeq,
+  getPrevSeqObservable,
+  seqSelector,
+  notifySequenceGap,
+}) {
+  if (initialSeq != null && getPrevSeqObservable != null) {
+    throw new Error("initialSeq and prevSeqObservable cannot be set together.");
+  }
+
   return (observable) => {
     return new Observable((subscriber) => {
       const logger = new Logger("sort() operator");
       const subscription = new Subscription();
 
-      const messagesListSubject = new BehaviorSubject(List());
-      let prevSeq = initialSeq;
+      let messagesList = List();
+      let prevSeq = initialSeq ?? -1;
+
+      const sharedObservable = observable.pipe(share());
 
       subscription.add(
-        observable.subscribe((message) => {
-          let list = messagesListSubject.getValue();
-          list = list.push(message);
-          messagesListSubject.next(list);
+        sharedObservable.subscribe((message) => {
+          messagesList = messagesList.push(message);
         })
       );
 
+      let sortingObservable = sharedObservable;
+
+      if (getPrevSeqObservable != null) {
+        sortingObservable = sortingObservable.pipe(
+          mergeMap(() => getPrevSeqObservable().pipe(first()))
+        );
+      } else {
+        sortingObservable = sortingObservable.pipe(mergeMap(() => of(null)));
+      }
+
       subscription.add(
-        observable
+        sortingObservable
           .pipe(
-            withLatestFrom(messagesListSubject),
-            map(([, list]) =>
-              list
+            map((prevData) => [
+              messagesList
                 .sortBy(seqSelector)
-                .filter((message) => seqSelector(message) > prevSeq)
-            ),
-            mergeMap((list) => {
+                .filter(
+                  (message) => seqSelector(message) > (prevData ?? prevSeq)
+                ),
+              prevData ?? prevSeq,
+            ]),
+            mergeMap(([list, prevSeqLocal]) => {
               if (list.size === 0) {
-                messagesListSubject.next(list);
+                messagesList = list;
                 return EMPTY;
               }
 
               let hasTheRightSequence = false;
-              if (prevSeq === -1) {
+              if (prevSeqLocal === -1) {
                 if (
                   seqSelector(list.get(0)) === 0 ||
                   seqSelector(list.get(0)) === 1
@@ -53,25 +76,28 @@ export function sort({ initialSeq, seqSelector }) {
                   hasTheRightSequence = true;
                 } else {
                   logger.warn(
-                    `first message's seq doesn't start with 0 or 1. (prevSeq: ${prevSeq})`,
+                    `first message's seq doesn't start with 0 or 1. (prevSeq: ${prevSeqLocal})`,
                     JSON.stringify(list.toJS(), null, 4)
                   );
                 }
               } else {
                 if (
                   seqSelector(list.get(0)) > 0 &&
-                  seqSelector(list.get(0)) === prevSeq + 1
+                  seqSelector(list.get(0)) === prevSeqLocal + 1
                 ) {
                   hasTheRightSequence = true;
                 } else {
                   logger.warn(
-                    `first message's seq wasn't right after prevSeq ${prevSeq}.`,
+                    `first message's seq wasn't right after prevSeq ${prevSeqLocal}.`,
                     JSON.stringify(list.toJS(), null, 4)
                   );
                 }
               }
 
               if (!hasTheRightSequence) {
+                if (notifySequenceGap != null) {
+                  notifySequenceGap(prevSeqLocal, seqSelector(list.get(0)));
+                }
                 return EMPTY;
               }
 
@@ -87,7 +113,7 @@ export function sort({ initialSeq, seqSelector }) {
                 prevIndex = i;
               }
 
-              messagesListSubject.next(list.slice(prevIndex + 1));
+              messagesList = list.slice(prevIndex + 1);
               return from(list.slice(0, prevIndex + 1));
             }),
             tap((message) => {

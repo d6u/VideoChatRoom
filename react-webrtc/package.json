@@ -43,5 +43,12 @@
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^4.1.1",
     "prettier": "^2.8.7"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "#ansi-styles": "chalk/source/vendor/ansi-styles/index.js",
+      "#supports-color": "chalk/source/vendor/supports-color/index.js"
+    },
+    "transformIgnorePatterns": ["node_modules/(?!@codemirror)/"]
   }
 }
