@@ -1,14 +1,4 @@
-import {
-  Subject,
-  fromEvent,
-  Subscription,
-  mergeMap,
-  defer,
-  from,
-  map,
-  concatMap,
-  EMPTY,
-} from "rxjs";
+import { Subject, fromEvent, Subscription, defer, concatMap } from "rxjs";
 import Logger from "./Logger";
 
 const WEBRTC_CONFIG = {
@@ -78,22 +68,41 @@ export default class PeerConnectionManager {
         .pipe(
           concatMap((command) =>
             defer(async () => {
-              this.logger.log(`executing command: ${command.type}`, command);
+              this.logger.log(
+                `>>> executing command: ${command.type}`,
+                command
+              );
 
               switch (command.type) {
                 case "CreateOffer":
-                  this.setRemoteDescription(command.description);
+                  const offer = await this.createOffer();
+                  this.offersSubject.next(offer);
                   break;
-                case "CreateAnswer":
-                  this.addIceCandidate(command.candidate);
+                case "CreateAnswer": {
+                  const answer = await this.createAnswer();
+                  this.answersSubject.next(answer);
                   break;
+                }
                 case "SetRemoteDescription":
+                  await this.setRemoteDescription(command.description);
                   break;
+                case "SetRemoteDescriptionAndCreateAnswer": {
+                  await this.setRemoteDescription(command.description);
+                  const answer = await this.createAnswer();
+                  this.answersSubject.next(answer);
+                  break;
+                }
                 case "AddIceCandidate":
+                  await this.addIceCandidate(command.candidate);
                   break;
                 default:
-                  return;
+                  break;
               }
+
+              this.logger.log(
+                `<<< finish executing command: ${command.type}`,
+                command
+              );
             })
           )
         )
@@ -109,31 +118,8 @@ export default class PeerConnectionManager {
   }
 
   addCommand(command) {
-    this.commandSubject.next(command);
-  }
-
-  createOfferObservable() {
-    return defer(() => {
-      this.logger.log(`creating offer`);
-      return this.pc.createOffer();
-    }).pipe(
-      mergeMap((offer) => {
-        this.logger.log(`setting local description for offer`);
-        return from(this.setLocalDescription(offer)).pipe(map(() => offer));
-      })
-    );
-  }
-
-  createAnswerObservable() {
-    return defer(() => {
-      this.logger.log(`creating answer`);
-      return this.pc.createAnswer();
-    }).pipe(
-      mergeMap((answer) => {
-        this.logger.log(`setting local description for answer`);
-        return from(this.setLocalDescription(answer)).pipe(map(() => answer));
-      })
-    );
+    this.logger.log(`*** adding command: ${command.type}`);
+    this.commandsSubject.next(command);
   }
 
   async createOffer() {
@@ -225,6 +211,7 @@ export default class PeerConnectionManager {
   }
 
   addTrack(track, stream) {
+    this.logger.log(`adding local track`);
     this.pc.addTrack(track, stream);
   }
 
