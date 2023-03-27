@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { createRoom } from "../../utils/Api";
+
+import { createRoom } from "../../apis/Api";
 
 export default function Root() {
   const [roomId, setRoomId] = useState("");

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
 import { Set } from "immutable";
-import { from, filter, BehaviorSubject, Subscription } from "rxjs";
-import Logger from "../../utils/Logger";
-import webSocketManager from "../../utils/WebSocketManager";
-import RoomStateSyncManager from "../../utils/RoomStateSyncManager";
+import { useEffect, useRef, useState } from "react";
+import { BehaviorSubject, Subscription, filter, from } from "rxjs";
+
+import RoomStateSyncManager from "../../../apis/RoomStateSyncManager";
+import webSocketManager from "../../../apis/WebSocketManager";
+import Logger from "../../../utils/Logger";
 import ClientBox from "./ClientBox";
 
 const logger = new Logger("Room");

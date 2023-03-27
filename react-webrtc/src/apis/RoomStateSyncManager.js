@@ -1,27 +1,28 @@
+import { List, Set } from "immutable";
 import {
   BehaviorSubject,
-  defer,
   EMPTY,
+  ReplaySubject,
+  Subject,
+  Subscription,
+  defer,
   filter,
   first,
   from,
   map,
   merge,
   mergeMap,
-  ReplaySubject,
   share,
   shareReplay,
-  Subject,
-  Subscription,
   tap,
   withLatestFrom,
   zipWith,
 } from "rxjs";
-import { Set, List } from "immutable";
-import { getRoomSnapshot, getRoomDeltas } from "./Api";
-import Logger from "./Logger";
-import Snapshot from "../models/Snapshot";
+
 import Delta from "../models/Delta";
+import Snapshot from "../models/Snapshot";
+import Logger from "../utils/Logger";
+import { getRoomDeltas, getRoomSnapshot } from "./Api";
 
 export default class RoomStateSyncManager {
   constructor(roomId, wsObservable) {

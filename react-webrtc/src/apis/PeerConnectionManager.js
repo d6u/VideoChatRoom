@@ -1,5 +1,6 @@
-import { Subject, fromEvent, Subscription, defer, concatMap } from "rxjs";
-import Logger from "./Logger";
+import { Subject, Subscription, concatMap, defer, fromEvent } from "rxjs";
+
+import Logger from "../utils/Logger";
 
 const WEBRTC_CONFIG = {
   iceServers: [

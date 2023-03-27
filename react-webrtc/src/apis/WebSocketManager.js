@@ -1,7 +1,8 @@
 import { Subject, Subscription, tap } from "rxjs";
 import { webSocket } from "rxjs/webSocket";
-import Logger from "./Logger";
+
 import endpoints from "../api_endpoints.json";
+import Logger from "../utils/Logger";
 
 class WebSocketManager {
   openObserver = new Subject();
