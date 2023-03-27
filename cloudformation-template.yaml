@@ -142,9 +142,9 @@ Resources:
             - HEAD
             - GET
           Compress: true
-          DefaultTTL: 86400
-          MinTTL: 86400
-          MaxTTL: 31536000
+          DefaultTTL: 0
+          MinTTL: 0
+          MaxTTL: 0
           ForwardedValues:
             QueryString: false
             Cookies:
@@ -160,6 +160,17 @@ Resources:
             ResponsePagePath: /index.html
             ResponseCode: 200
             ErrorCachingMinTTL: 0
+        CacheBehaviors:
+          - PathPattern: /static/*
+            TargetOriginId: S3BucketOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            MinTTL: 86400
+            DefaultTTL: 86400
+            MaxTTL: 31536000
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
 
   # --- DynamoDB ---
   DynamoDbTableRoomSnapshots:
