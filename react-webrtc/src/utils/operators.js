@@ -68,30 +68,13 @@ export function sort({
               }
 
               let hasTheRightSequence = false;
-              if (prevSeqLocal === -1) {
-                if (
-                  seqSelector(list.get(0)) === 0 ||
-                  seqSelector(list.get(0)) === 1
-                ) {
-                  hasTheRightSequence = true;
-                } else {
-                  logger.warn(
-                    `first message's seq doesn't start with 0 or 1. (prevSeq: ${prevSeqLocal})`,
-                    JSON.stringify(list.toJS(), null, 4)
-                  );
-                }
+              if (seqSelector(list.get(0)) === prevSeqLocal + 1) {
+                hasTheRightSequence = true;
               } else {
-                if (
-                  seqSelector(list.get(0)) > 0 &&
-                  seqSelector(list.get(0)) === prevSeqLocal + 1
-                ) {
-                  hasTheRightSequence = true;
-                } else {
-                  logger.warn(
-                    `first message's seq wasn't right after prevSeq ${prevSeqLocal}.`,
-                    JSON.stringify(list.toJS(), null, 4)
-                  );
-                }
+                logger.warn(
+                  `first message's seq wasn't right after prevSeq ${prevSeqLocal}.`,
+                  JSON.stringify(list.toJS(), null, 4)
+                );
               }
 
               if (!hasTheRightSequence) {

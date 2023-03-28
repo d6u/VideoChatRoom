@@ -71,8 +71,8 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
       leaderSelectionMessagesObservable: leaderSelectionMessagesObservable.pipe(
         takeWhile((message) => message.type !== "ConfirmingLeader", true)
       ),
+      signalingRemoteMessageObservable,
       localMediaStreamObservable: localMediaStreamSubject,
-      remoteMessagesObservable: signalingRemoteMessageObservable,
     });
 
     return () => {

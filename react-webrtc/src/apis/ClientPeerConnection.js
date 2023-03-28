@@ -27,12 +27,11 @@ export default class ClientPeerConnection {
 
   startConnectionProcess({
     leaderSelectionMessagesObservable,
+    signalingRemoteMessageObservable,
     localMediaStreamObservable,
-    remoteMessagesObservable,
   }) {
     this.logger.log(`initializeConnection()`);
 
-    this.remoteMessagesObservable = remoteMessagesObservable;
     this.localMediaStreamObservable = localMediaStreamObservable;
 
     // TODO: Although the chance is very low, avoid collisions.
@@ -48,11 +47,18 @@ export default class ClientPeerConnection {
     });
 
     this.subscription.add(
-      concat(leaderSelectionMessagesObservable, remoteMessagesObservable)
+      concat(
+        leaderSelectionMessagesObservable,
+        signalingRemoteMessageObservable.pipe(
+          sort({ initialSeq: -1, seqSelector: (message) => message.seq })
+        )
+      )
         .pipe(
-          sort({ initialSeq: -1, seqSelector: (message) => message.seq }),
           tap((message) => {
-            this.logger.log(`[${message.seq}] <== [${message.type}]:`, message);
+            this.logger.log(
+              `[${message.seq ?? "X"}] <== [${message.type}]:`,
+              message
+            );
           })
         )
         .subscribe(this.handler)
@@ -71,9 +77,16 @@ export default class ClientPeerConnection {
   send(rawMessage) {
     const message = {
       ...rawMessage,
-      seq: this.seq++,
     };
-    this.logger.log(`==> [${message.seq}] [${message.type}]:`, message);
+
+    if (
+      message.type !== "SelectingLeader" &&
+      message.type !== "ConfirmingLeader"
+    ) {
+      message.seq = this.seq++;
+    }
+
+    this.logger.log(`==> [${message.seq ?? "X"}] [${message.type}]:`, message);
     this.eventsSubject.next({
       type: "SendMessageToRemote",
       message: {
