@@ -4,8 +4,20 @@ import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
 import PeerConnectionManager from "./PeerConnectionManager";
 
+function createRandomValue() {
+  return Math.floor(Math.random() * (Math.pow(2, 31) - 1));
+}
+
 export default class ClientPeerConnection {
+  // public
+  eventsSubject = new Subject();
+
+  // private
   subscription = new Subscription();
+  hasReceivedFirstLeaderSelectionMessage = false;
+  seq = 0;
+
+  // public
 
   constructor(clientId) {
     this.clientId = clientId;
@@ -13,35 +25,26 @@ export default class ClientPeerConnection {
     this.logger.log(`constructor()`);
   }
 
-  createConnectionAndEventsObservable({
-    remoteMessagesObservable,
+  startConnectionProcess({
     localMediaStreamObservable,
-    sendMessage,
+    remoteMessagesObservable,
   }) {
     this.logger.log(`initializeConnection()`);
 
     this.remoteMessagesObservable = remoteMessagesObservable;
     this.localMediaStreamObservable = localMediaStreamObservable;
-    this.sendMessage = sendMessage;
 
-    this.eventsSubject = new Subject();
+    // TODO: Although the chance is very low, avoid collisions.
+    this.leaderSelectionValue = createRandomValue();
 
-    this.hasKnownPeerConnectionRole = false;
-    this.isPolite = false;
-    this.seq = 0;
-
-    this.leaderSelectionValue = Math.floor(
-      Math.random() * (Math.pow(2, 31) - 1)
-    );
-
-    this.subscription.add(
-      timer(200).subscribe(() => {
-        this.send({
-          type: "SelectingLeader",
-          randomValue: this.leaderSelectionValue,
-        });
-      })
-    );
+    // Add a small delay so that React dev mode won't throw this off in
+    // useEffect.
+    this.sendSelectingLeaderMessageSubscription = timer(200).subscribe(() => {
+      this.send({
+        type: "SelectingLeader",
+        randomValue: this.leaderSelectionValue,
+      });
+    });
 
     this.subscription.add(
       remoteMessagesObservable
@@ -53,23 +56,30 @@ export default class ClientPeerConnection {
         )
         .subscribe(this.handler)
     );
-
-    return this.eventsSubject;
   }
 
-  send(message) {
-    const messageWithSeq = {
-      ...message,
+  destroy() {
+    this.logger.log(`destroy()`);
+    this.subscription.unsubscribe();
+    this.sendSelectingLeaderMessageSubscription?.unsubscribe();
+    this.pcm?.destroy();
+  }
+
+  // private
+
+  send(rawMessage) {
+    const message = {
+      ...rawMessage,
       seq: this.seq++,
     };
-    this.logger.log(
-      `==> [${messageWithSeq.seq}] [${messageWithSeq.type}]:`,
-      messageWithSeq
-    );
-    this.sendMessage({
-      action: "DirectMessage",
-      toClientId: this.clientId,
-      message: messageWithSeq,
+    this.logger.log(`==> [${message.seq}] [${message.type}]:`, message);
+    this.eventsSubject.next({
+      type: "SendMessageToRemote",
+      message: {
+        action: "DirectMessage",
+        toClientId: this.clientId,
+        message,
+      },
     });
   }
 
@@ -83,7 +93,7 @@ export default class ClientPeerConnection {
     }
 
     if (type === "Offer" || type === "Answer") {
-      this.handleOfferOrAnswer({ type, description });
+      this.pcm.handleRemoteDescription(description);
     }
 
     if (type === "IceCandidate") {
@@ -92,77 +102,76 @@ export default class ClientPeerConnection {
   };
 
   handleSelectingLeaderAndConfirmingLeader({ randomValue }) {
-    if (!this.hasKnownPeerConnectionRole) {
-      this.hasKnownPeerConnectionRole = true;
-
-      this.isPolite = this.leaderSelectionValue < randomValue;
-
-      this.pcm = new PeerConnectionManager(this.isPolite);
-
-      this.subscription.add(
-        this.pcm.tracksSubject.subscribe((event) => {
-          this.logger.debug("remote stream avaiable", event.streams[0]);
-          this.logger.debug("remote track avaiable", event.track);
-
-          if (event.streams != null && event.streams[0] != null) {
-            this.eventsSubject.next({
-              type: "RemoteStream",
-              stream: event.streams[0],
-            });
-          } else {
-            this.eventsSubject.next({
-              type: "RemoteTrack",
-              track: event.track,
-            });
-          }
-        })
-      );
-
-      this.subscription.add(
-        this.pcm.descriptionsSubject.subscribe((description) => {
-          this.send({
-            type: description.type === "offer" ? "Offer" : "Answer",
-            description,
-          });
-        })
-      );
-
-      this.subscription.add(
-        this.pcm.localIceCandidatesSubject.subscribe((candidate) => {
-          this.send({ type: "IceCandidate", candidate });
-        })
-      );
-
-      this.pcm.createConnection();
-
-      this.send({
-        type: "ConfirmingLeader",
-        randomValue: this.leaderSelectionValue,
-      });
+    if (this.hasReceivedFirstLeaderSelectionMessage) {
+      return;
     }
+
+    this.hasReceivedFirstLeaderSelectionMessage = true;
+
+    const isPolite = this.leaderSelectionValue < randomValue;
+
+    this.pcm = new PeerConnectionManager(isPolite);
+
+    this.subscription.add(
+      this.pcm.tracksSubject.subscribe((event) => {
+        this.logger.debug("remote stream avaiable", event.streams[0]);
+        this.logger.debug("remote track avaiable", event.track);
+
+        if (event.streams != null && event.streams[0] != null) {
+          this.eventsSubject.next({
+            type: "RemoteStream",
+            stream: event.streams[0],
+          });
+        } else {
+          this.eventsSubject.next({
+            type: "RemoteTrack",
+            track: event.track,
+          });
+        }
+      })
+    );
+
+    this.subscription.add(
+      this.pcm.descriptionsSubject.subscribe((description) => {
+        this.send({
+          type: description.type === "offer" ? "Offer" : "Answer",
+          description,
+        });
+      })
+    );
+
+    this.subscription.add(
+      this.pcm.localIceCandidatesSubject.subscribe((candidate) => {
+        this.send({ type: "IceCandidate", candidate });
+      })
+    );
+
+    this.pcm.createConnection();
+
+    // Stop sending SelectingLeader message
+    // since we are send ConfirmingLeader message.
+    this.sendSelectingLeaderMessageSubscription?.unsubscribe();
+
+    this.send({
+      type: "ConfirmingLeader",
+      randomValue: this.leaderSelectionValue,
+    });
   }
 
   handleConfirmingLeader() {
     this.subscription.add(
       this.localMediaStreamObservable.subscribe((mediaStream) => {
         this.logger.debug("local MediaStream updated", mediaStream);
+
         if (mediaStream != null) {
           mediaStream.getTracks().forEach((track) => {
             this.logger.debug("local track", track);
+            // This would trigger negotiationneeded, thus, start the signaling
+            // process.
             this.pcm.addTrack(track, mediaStream);
           });
         }
       })
     );
-  }
-
-  handleOfferOrAnswer({ description }) {
-    this.pcm.handleRemoteDescription(description);
-  }
-
-  destroy() {
-    this.logger.log(`destroy()`);
-    this.subscription.unsubscribe();
-    this.pcm?.destroy();
   }
 }

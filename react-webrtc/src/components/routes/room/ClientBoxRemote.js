@@ -33,33 +33,33 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
     const subscription = new Subscription();
 
     subscription.add(
-      refClientPeerConnection.current
-        .createConnectionAndEventsObservable({
-          remoteMessagesObservable: webSocketManager.messagesSubject.pipe(
-            filter(filterDirectMessage(clientId)),
-            map((data) => data.message)
-          ),
-          localMediaStreamObservable: localMediaStreamSubject,
-          sendMessage: (message) => {
-            webSocketManager.send(message);
-          },
-        })
-        .subscribe((event) => {
-          switch (event.type) {
-            case "RemoteStream":
-              refVideo.current.srcObject = event.stream;
-              break;
-            case "RemoteTrack":
-              if (refVideo.current.srcObject == null) {
-                refVideo.current.srcObject = new MediaStream();
-              }
-              refVideo.current.srcObject.addTrack(event.track);
-              break;
-            default:
-              break;
-          }
-        })
+      refClientPeerConnection.current.eventsSubject.subscribe((event) => {
+        switch (event.type) {
+          case "SendMessageToRemote":
+            webSocketManager.send(event.message);
+            break;
+          case "RemoteStream":
+            refVideo.current.srcObject = event.stream;
+            break;
+          case "RemoteTrack":
+            if (refVideo.current.srcObject == null) {
+              refVideo.current.srcObject = new MediaStream();
+            }
+            refVideo.current.srcObject.addTrack(event.track);
+            break;
+          default:
+            break;
+        }
+      })
     );
+
+    refClientPeerConnection.current.startConnectionProcess({
+      localMediaStreamObservable: localMediaStreamSubject,
+      remoteMessagesObservable: webSocketManager.messagesSubject.pipe(
+        filter(filterDirectMessage(clientId)),
+        map((data) => data.message)
+      ),
+    });
 
     return () => {
       subscription.unsubscribe();
