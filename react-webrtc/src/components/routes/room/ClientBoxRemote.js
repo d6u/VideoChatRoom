@@ -82,7 +82,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
 
   return (
     <div className={classNames({ "Room_single-video-container": true })}>
-      <code>(REMOTE) {clientId}</code>
+      <code>{clientId}</code>
       <video
         key={clientId}
         ref={refVideo}

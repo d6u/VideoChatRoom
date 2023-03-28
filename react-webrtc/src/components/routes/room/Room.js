@@ -6,6 +6,7 @@ import RoomStateSyncManager from "../../../apis/RoomStateSyncManager";
 import webSocketManager from "../../../apis/WebSocketManager";
 import Logger from "../../../utils/Logger";
 import ClientBox from "./ClientBox";
+import "./Room.css";
 
 const logger = new Logger("Room");
 
