@@ -34,8 +34,6 @@ export default class ClientPeerConnection {
       Math.random() * (Math.pow(2, 31) - 1)
     );
 
-    this.pcm = new PeerConnectionManager();
-
     this.subscription.add(
       timer(200).subscribe(() => {
         this.send({
@@ -89,7 +87,7 @@ export default class ClientPeerConnection {
     }
 
     if (type === "IceCandidate") {
-      this.pcm.addCommand({ type: "AddIceCandidate", candidate });
+      this.pcm.addIceCandidate(candidate);
     }
   };
 
@@ -99,7 +97,7 @@ export default class ClientPeerConnection {
 
       this.isPolite = this.leaderSelectionValue < randomValue;
 
-      this.pcm.createConnection();
+      this.pcm = new PeerConnectionManager(this.isPolite);
 
       this.subscription.add(
         this.pcm.tracksSubject.subscribe((event) => {
@@ -121,14 +119,11 @@ export default class ClientPeerConnection {
       );
 
       this.subscription.add(
-        this.pcm.offersSubject.subscribe((description) => {
-          this.send({ type: "Offer", description });
-        })
-      );
-
-      this.subscription.add(
-        this.pcm.answersSubject.subscribe((description) => {
-          this.send({ type: "Answer", description });
+        this.pcm.descriptionsSubject.subscribe((description) => {
+          this.send({
+            type: description.type === "offer" ? "Offer" : "Answer",
+            description,
+          });
         })
       );
 
@@ -138,13 +133,7 @@ export default class ClientPeerConnection {
         })
       );
 
-      this.subscription.add(
-        this.pcm.negotiationNeededSubject.subscribe(() => {
-          this.pcm.addCommand({
-            type: "CreateOffer",
-          });
-        })
-      );
+      this.pcm.createConnection();
 
       this.send({
         type: "ConfirmingLeader",
@@ -167,44 +156,8 @@ export default class ClientPeerConnection {
     );
   }
 
-  handleOfferOrAnswer({ type, description }) {
-    this.logger.log(
-      `received remote description:`,
-      `type = ${type}`,
-      `is polite = ${this.isPolite}`,
-      `signaling state = ${this.pcm.getSignalingState()}`
-    );
-
-    if (type === "Offer" && this.pcm.getSignalingState() !== "stable") {
-      if (!this.isPolite) {
-        return;
-      }
-
-      this.logger.log(
-        "setting remote description and rollback local description"
-      );
-
-      this.pcm.addCommand({
-        type: "SetRemoteDescriptionAndCreateAnswer",
-        description,
-      });
-    } else {
-      this.logger.log(
-        "setting remote description without rollback local description"
-      );
-
-      if (type === "Offer") {
-        this.pcm.addCommand({
-          type: "SetRemoteDescriptionAndCreateAnswer",
-          description,
-        });
-      } else {
-        this.pcm.addCommand({
-          type: "SetRemoteDescription",
-          description,
-        });
-      }
-    }
+  handleOfferOrAnswer({ description }) {
+    this.pcm.handleRemoteDescription(description);
   }
 
   destroy() {
