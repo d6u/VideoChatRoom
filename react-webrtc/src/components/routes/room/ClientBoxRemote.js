@@ -1,11 +1,9 @@
 import classNames from "classnames";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Subscription, filter, map, tap } from "rxjs";
+import { useEffect, useRef, useState } from "react";
+import { Subscription, filter, map } from "rxjs";
 
-import PeerConnectionManager from "../../../apis/PeerConnectionManager";
+import ClientPeerConnection from "../../../apis/ClientPeerConnection";
 import webSocketManager from "../../../apis/WebSocketManager";
-import { sort } from "../../../utils/operators";
-import { useConst, useLogger } from "../../hooks";
 
 function filterDirectMessage(clientId) {
   return function (data) {
@@ -18,228 +16,60 @@ function filterDirectMessage(clientId) {
 }
 
 export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
-  const logger = useLogger(`ClientBoxRemote(${clientId})`);
-  const localLeaderSelectionRandomValue = useConst(() =>
-    Math.floor(Math.random() * (Math.pow(2, 31) - 1))
-  );
-
-  const refSeq = useRef(0);
   const refVideo = useRef(null);
-  const refPcm = useRef(null);
+  const refClientPeerConnection = useRef(null);
 
-  const [stateIsPolite, setStateIsPolite] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
-    refPcm.current = new PeerConnectionManager();
+    refClientPeerConnection.current = new ClientPeerConnection(clientId);
 
     return () => {
-      refPcm.current.destroy();
+      refClientPeerConnection.current.destroy();
     };
   }, [clientId]);
 
-  const send = useCallback(
-    (message) => {
-      const messageWithSeq = {
-        ...message,
-        seq: refSeq.current++,
-      };
-      logger.log(
-        `==> [${messageWithSeq.seq}] [${messageWithSeq.type}]:`,
-        messageWithSeq
-      );
-      webSocketManager.send({
-        action: "DirectMessage",
-        toClientId: clientId,
-        message: messageWithSeq,
-      });
-    },
-    [clientId, logger]
-  );
-
   useEffect(() => {
-    logger.debug(`useEffect() setup. clientId = ${clientId}`);
-
     const subscription = new Subscription();
 
-    let hasKnownPeerConnectionRole = false;
-    let isPolite = false;
-
-    // Defer executing to avoid immediate clean up in useEffect()
-    const timeoutHandler = setTimeout(() => {
-      send({
-        type: "SelectingLeader",
-        randomValue: localLeaderSelectionRandomValue,
-      });
-    }, 200);
-
-    const remoteMessagesObservable = webSocketManager.messagesSubject.pipe(
-      filter(filterDirectMessage(clientId)),
-      map((data) => data.message)
-    );
-
     subscription.add(
-      remoteMessagesObservable
-        .pipe(
-          sort({ initialSeq: -1, seqSelector: (message) => message.seq }),
-          tap((message) => {
-            logger.log(`[${message.seq}] <== [${message.type}]:`, message);
-          })
-        )
-        .subscribe(({ type, randomValue, description, candidate }) => {
-          if (type === "SelectingLeader" || type === "ConfirmingLeader") {
-            if (!hasKnownPeerConnectionRole) {
-              hasKnownPeerConnectionRole = true;
-
-              if (localLeaderSelectionRandomValue > randomValue) {
-                isPolite = false;
-              } else {
-                isPolite = true;
+      refClientPeerConnection.current
+        .createConnectionAndEventsObservable({
+          remoteMessagesObservable: webSocketManager.messagesSubject.pipe(
+            filter(filterDirectMessage(clientId)),
+            map((data) => data.message)
+          ),
+          localMediaStreamObservable: localMediaStreamSubject,
+          sendMessage: (message) => {
+            webSocketManager.send(message);
+          },
+        })
+        .subscribe((event) => {
+          switch (event.type) {
+            case "RemoteStream":
+              refVideo.current.srcObject = event.stream;
+              break;
+            case "RemoteTrack":
+              if (refVideo.current.srcObject == null) {
+                refVideo.current.srcObject = new MediaStream();
               }
-              setStateIsPolite(isPolite);
-
-              refPcm.current.createConnection();
-
-              subscription.add(
-                refPcm.current.tracksSubject.subscribe((event) => {
-                  logger.debug("remote stream avaiable", event.streams[0]);
-                  logger.debug("remote track avaiable", event.track);
-
-                  if (event.streams != null && event.streams[0] != null) {
-                    refVideo.current.srcObject = event.streams[0];
-                  } else {
-                    if (refVideo.current.srcObject == null) {
-                      logger.debug("video doesn't have srcObject");
-                      refVideo.current.srcObject = new MediaStream();
-                    }
-                    refVideo.current.srcObject.addTrack(event.track);
-                  }
-                })
-              );
-
-              subscription.add(
-                refPcm.current.offersSubject.subscribe((description) => {
-                  send({ type: "Offer", description });
-                })
-              );
-
-              subscription.add(
-                refPcm.current.answersSubject.subscribe((description) => {
-                  send({ type: "Answer", description });
-                })
-              );
-
-              subscription.add(
-                refPcm.current.localIceCandidatesSubject.subscribe(
-                  (candidate) => {
-                    send({ type: "IceCandidate", candidate });
-                  }
-                )
-              );
-
-              subscription.add(
-                refPcm.current.negotiationNeededSubject.subscribe(() => {
-                  refPcm.current.addCommand({
-                    type: "CreateOffer",
-                  });
-                })
-              );
-
-              // Don't send out SelectingLeader if we have already moved to
-              // ConfirmingLeader
-              clearTimeout(timeoutHandler);
-
-              send({
-                type: "ConfirmingLeader",
-                randomValue: localLeaderSelectionRandomValue,
-              });
-            } else {
-              logger.debug(`${type} has no effect`);
-            }
-          }
-
-          if (type === "ConfirmingLeader") {
-            subscription.add(
-              localMediaStreamSubject.subscribe((mediaStream) => {
-                logger.debug("local MediaStream updated", mediaStream);
-                if (mediaStream != null) {
-                  mediaStream.getTracks().forEach((track) => {
-                    logger.debug("local track", track);
-                    refPcm.current.addTrack(track, mediaStream);
-                  });
-                }
-              })
-            );
-          }
-
-          if (type === "Offer" || type === "Answer") {
-            logger.log(
-              `received remote description:`,
-              `type = ${type}`,
-              `is polite = ${isPolite}`,
-              `signaling state = ${refPcm.current.getSignalingState()}`
-            );
-
-            if (
-              type === "Offer" &&
-              refPcm.current.getSignalingState() !== "stable"
-            ) {
-              if (!isPolite) {
-                return;
-              }
-
-              logger.log(
-                "setting remote description and rollback local description"
-              );
-
-              refPcm.current.addCommand({
-                type: "SetRemoteDescriptionAndCreateAnswer",
-                description,
-              });
-            } else {
-              logger.log(
-                "setting remote description without rollback local description"
-              );
-
-              if (type === "Offer") {
-                refPcm.current.addCommand({
-                  type: "SetRemoteDescriptionAndCreateAnswer",
-                  description,
-                });
-              } else {
-                refPcm.current.addCommand({
-                  type: "SetRemoteDescription",
-                  description,
-                });
-              }
-            }
-          }
-
-          if (type === "IceCandidate") {
-            refPcm.current.addCommand({ type: "AddIceCandidate", candidate });
+              refVideo.current.srcObject.addTrack(event.track);
+              break;
+            default:
+              break;
           }
         })
     );
 
     return () => {
-      logger.debug(`useEffect() clean up. clientId = ${clientId}`);
-      clearTimeout(timeoutHandler);
       subscription.unsubscribe();
     };
-  }, [
-    clientId,
-    localMediaStreamSubject,
-    send,
-    logger,
-    localLeaderSelectionRandomValue,
-  ]);
+  }, [clientId, localMediaStreamSubject]);
 
   return (
     <div className={classNames({ "Room_single-video-container": true })}>
       <div>
-        <code>
-          (REMOTE) {`(${stateIsPolite})`} {clientId}
-        </code>
+        <code>(REMOTE) {clientId}</code>
       </div>
       <video
         key={clientId}
