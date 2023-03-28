@@ -106,7 +106,7 @@ export default class ClientPeerConnection {
       this.handleConfirmingLeader();
     }
 
-    if (type === "Offer" || type === "Answer") {
+    if (type === "Description") {
       this.pcm.handleRemoteDescription(description);
     }
 
@@ -153,7 +153,7 @@ export default class ClientPeerConnection {
     this.subscription.add(
       this.pcm.descriptionsSubject.subscribe((description) => {
         this.send({
-          type: description.type === "offer" ? "Offer" : "Answer",
+          type: "Description",
           description,
         });
       })

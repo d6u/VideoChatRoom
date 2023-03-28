@@ -1,5 +1,5 @@
 import classNames from "classnames";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import ClientBoxRemote from "./ClientBoxRemote";
 
@@ -45,6 +45,8 @@ export default function ClientBox({
 function ClientBoxLocal({ clientId, localMediaStreamSubject }) {
   const refVideo = useRef(null);
 
+  const [isMuted, setIsMuted] = useState(false);
+
   useEffect(() => {
     const subscription = localMediaStreamSubject.subscribe((mediaStream) => {
       if (mediaStream != null) {
@@ -64,9 +66,7 @@ function ClientBoxLocal({ clientId, localMediaStreamSubject }) {
         "Room_single-video-container-self": true,
       })}
     >
-      <div>
-        <code>(LOCAL) {clientId}</code>
-      </div>
+      <code>(LOCAL) {clientId}</code>
       <video
         ref={refVideo}
         width={320}
@@ -75,6 +75,25 @@ function ClientBoxLocal({ clientId, localMediaStreamSubject }) {
         autoPlay
         playsInline
       />
+      <button
+        className="Room_mute-button"
+        onClick={() =>
+          setIsMuted((isMuted) => {
+            isMuted = !isMuted;
+
+            if (refVideo.current.srcObject != null) {
+              const audioTracks = refVideo.current.srcObject.getAudioTracks();
+              if (audioTracks.length > 0) {
+                audioTracks[0].enabled = !isMuted;
+              }
+            }
+
+            return isMuted;
+          })
+        }
+      >
+        {isMuted ? "Unmute Myself" : "Mute Myself"}
+      </button>
     </div>
   );
 }

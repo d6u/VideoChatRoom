@@ -123,12 +123,13 @@ export default function Room({ roomId }) {
 
   return (
     <div>
-      <h1>
-        Room ID: <code>{roomId}</code> ({wsStatus})
-      </h1>
-      <h2>
-        Current client ID: <code>{localClientId}</code>
-      </h2>
+      <pre>
+        Room ID: {roomId}
+        <br />
+        WebSocket: {wsStatus}
+        <br />
+        Current client ID: {localClientId}
+      </pre>
       <div className="Room_videos-container">
         {clientIds
           .map((id) => (

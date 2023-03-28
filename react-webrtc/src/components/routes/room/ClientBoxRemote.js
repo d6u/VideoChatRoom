@@ -82,9 +82,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
 
   return (
     <div className={classNames({ "Room_single-video-container": true })}>
-      <div>
-        <code>(REMOTE) {clientId}</code>
-      </div>
+      <code>(REMOTE) {clientId}</code>
       <video
         key={clientId}
         ref={refVideo}
@@ -95,6 +93,7 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
         playsInline
       />
       <button
+        className="Room_mute-button"
         onClick={() => {
           setIsMuted((isMuted) => !isMuted);
         }}
