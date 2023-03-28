@@ -1,4 +1,4 @@
-import { Subject, Subscription, tap, timer } from "rxjs";
+import { Subject, Subscription, concat, tap, timer } from "rxjs";
 
 import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
@@ -26,6 +26,7 @@ export default class ClientPeerConnection {
   }
 
   startConnectionProcess({
+    leaderSelectionMessagesObservable,
     localMediaStreamObservable,
     remoteMessagesObservable,
   }) {
@@ -47,7 +48,7 @@ export default class ClientPeerConnection {
     });
 
     this.subscription.add(
-      remoteMessagesObservable
+      concat(leaderSelectionMessagesObservable, remoteMessagesObservable)
         .pipe(
           sort({ initialSeq: -1, seqSelector: (message) => message.seq }),
           tap((message) => {
@@ -114,8 +115,13 @@ export default class ClientPeerConnection {
 
     this.subscription.add(
       this.pcm.tracksSubject.subscribe((event) => {
-        this.logger.debug("remote stream avaiable", event.streams[0]);
-        this.logger.debug("remote track avaiable", event.track);
+        this.logger.debug(
+          "remote track avaiable",
+          "stream = ",
+          event.streams[0],
+          "track = ",
+          event.track
+        );
 
         if (event.streams != null && event.streams[0] != null) {
           this.eventsSubject.next({
@@ -148,7 +154,7 @@ export default class ClientPeerConnection {
 
     this.pcm.createConnection();
 
-    // Stop sending SelectingLeader message
+    // Stop sending SelectingLeader message,
     // since we are send ConfirmingLeader message.
     this.sendSelectingLeaderMessageSubscription?.unsubscribe();
 

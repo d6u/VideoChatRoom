@@ -1,6 +1,6 @@
 import classNames from "classnames";
 import { useEffect, useRef, useState } from "react";
-import { Subscription, filter, map } from "rxjs";
+import { Subscription, filter, map, partition, share, takeWhile } from "rxjs";
 
 import ClientPeerConnection from "../../../apis/ClientPeerConnection";
 import webSocketManager from "../../../apis/WebSocketManager";
@@ -53,12 +53,26 @@ export default function ClientBoxRemote({ clientId, localMediaStreamSubject }) {
       })
     );
 
-    refClientPeerConnection.current.startConnectionProcess({
-      localMediaStreamObservable: localMediaStreamSubject,
-      remoteMessagesObservable: webSocketManager.messagesSubject.pipe(
+    const [
+      leaderSelectionMessagesObservable,
+      signalingRemoteMessageObservable,
+    ] = partition(
+      webSocketManager.messagesSubject.pipe(
         filter(filterDirectMessage(clientId)),
-        map((data) => data.message)
+        map((data) => data.message),
+        share()
       ),
+      (message) =>
+        message.type === "SelectingLeader" ||
+        message.type === "ConfirmingLeader"
+    );
+
+    refClientPeerConnection.current.startConnectionProcess({
+      leaderSelectionMessagesObservable: leaderSelectionMessagesObservable.pipe(
+        takeWhile((message) => message.type !== "ConfirmingLeader", true)
+      ),
+      localMediaStreamObservable: localMediaStreamSubject,
+      remoteMessagesObservable: signalingRemoteMessageObservable,
     });
 
     return () => {
