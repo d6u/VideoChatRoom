@@ -12,8 +12,6 @@ import {
   tap,
 } from "rxjs";
 
-import Logger from "./Logger";
-
 export function sort({
   initialSeq,
   getPrevSeqObservable,
@@ -26,7 +24,6 @@ export function sort({
 
   return (observable) => {
     return new Observable((subscriber) => {
-      const logger = new Logger("sort() operator");
       const subscription = new Subscription();
 
       let messagesList = List();
@@ -67,37 +64,32 @@ export function sort({
                 return EMPTY;
               }
 
-              let hasTheRightSequence = false;
               if (seqSelector(list.get(0)) === prevSeqLocal + 1) {
-                hasTheRightSequence = true;
-              } else {
-                logger.warn(
-                  `first message's seq wasn't right after prevSeq ${prevSeqLocal}.`,
-                  JSON.stringify(list.toJS(), null, 4)
-                );
-              }
+                let prevIndex = 0;
 
-              if (!hasTheRightSequence) {
-                if (notifySequenceGap != null) {
-                  notifySequenceGap(prevSeqLocal, seqSelector(list.get(0)));
+                for (let i = 1; i < list.size; i++) {
+                  if (
+                    seqSelector(list.get(i)) !==
+                    seqSelector(list.get(prevIndex)) + 1
+                  ) {
+                    break;
+                  }
+                  prevIndex = i;
                 }
-                return EMPTY;
+
+                messagesList = list.slice(prevIndex + 1);
+                return from(list.slice(0, prevIndex + 1));
               }
 
-              let prevIndex = 0;
-
-              for (let i = 1; i < list.size; i++) {
-                if (
-                  seqSelector(list.get(i)) !==
-                  seqSelector(list.get(prevIndex)) + 1
-                ) {
-                  break;
-                }
-                prevIndex = i;
+              if (notifySequenceGap != null) {
+                notifySequenceGap({
+                  fromSeq: prevSeqLocal,
+                  toSeq: seqSelector(list.get(0)),
+                  messages: list,
+                });
               }
 
-              messagesList = list.slice(prevIndex + 1);
-              return from(list.slice(0, prevIndex + 1));
+              return EMPTY;
             }),
             tap((message) => {
               prevSeq = seqSelector(message);

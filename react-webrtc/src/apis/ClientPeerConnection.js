@@ -50,7 +50,16 @@ export default class ClientPeerConnection {
       concat(
         leaderSelectionMessagesObservable,
         signalingRemoteMessageObservable.pipe(
-          sort({ initialSeq: -1, seqSelector: (message) => message.seq })
+          sort({
+            initialSeq: -1,
+            seqSelector: (message) => message.seq,
+            notifySequenceGap: ({ fromSeq, toSeq, messages }) => {
+              this.logger.warn(
+                `first message's seq wasn't right after prevSeq ${fromSeq}.`,
+                JSON.stringify(messages.toJS(), null, 4)
+              );
+            },
+          })
         )
       )
         .pipe(

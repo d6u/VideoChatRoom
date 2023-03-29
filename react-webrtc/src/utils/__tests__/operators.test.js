@@ -1,4 +1,5 @@
 import { expect } from "@jest/globals";
+import { List } from "immutable";
 import { BehaviorSubject, first, map, tap, zipWith } from "rxjs";
 import { TestScheduler } from "rxjs/testing";
 
@@ -68,7 +69,16 @@ test("notify sequence gap", () => {
   });
 
   expect(notifySequenceGapFn).toHaveBeenCalledTimes(2);
-  expect(notifySequenceGapFn).toHaveBeenCalledWith(-1, 2);
+  expect(notifySequenceGapFn).toHaveBeenNthCalledWith(1, {
+    fromSeq: -1,
+    toSeq: 2,
+    messages: List([{ seq: 2 }]),
+  });
+  expect(notifySequenceGapFn).toHaveBeenNthCalledWith(2, {
+    fromSeq: -1,
+    toSeq: 2,
+    messages: List([{ seq: 2 }, { seq: 3 }]),
+  });
 });
 
 test("generates the stream correctly 2", () => {
