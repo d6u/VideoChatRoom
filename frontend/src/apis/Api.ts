@@ -1,7 +1,6 @@
 import endpoints from "../api_endpoints.json";
-
-import { RawSnapshot } from "../models/Snapshot";
 import { RawDelta } from "../models/Delta";
+import { RawSnapshot } from "../models/Snapshot";
 
 export async function createRoom(): Promise<{ roomId: string }> {
   const response = await fetch(`${endpoints.http_endpoint_url}/rooms`, {

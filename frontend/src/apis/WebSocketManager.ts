@@ -1,5 +1,5 @@
 import { Observable, Subject, Subscription, tap } from "rxjs";
-import { webSocket, WebSocketSubject } from "rxjs/webSocket";
+import { WebSocketSubject, webSocket } from "rxjs/webSocket";
 
 import endpoints from "../api_endpoints.json";
 import { WebSocketMessage } from "../models/webSocketMessages";

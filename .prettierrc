@@ -1,5 +1,5 @@
 {
-    "importOrder": ["^components/(.*)$", "^[./]" ],
-    "importOrderSeparation": true,
-    "importOrderSortSpecifiers": true
+  "importOrder": ["^components/(.*)$", "^[./]"],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true
 }

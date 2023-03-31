@@ -1,5 +1,5 @@
+import chalk, { BackgroundColorName, ChalkInstance } from "chalk";
 import { customAlphabet } from "nanoid";
-import chalk, { ChalkInstance, BackgroundColorName } from "chalk";
 
 const nanoid = customAlphabet("1234567890abcdef", 5);
 

@@ -1,5 +1,6 @@
-import { RecordOf, Set } from "immutable";
+import { Set } from "immutable";
 import {
+  Observable,
   ReplaySubject,
   Subject,
   Subscription,
@@ -13,11 +14,10 @@ import {
   shareReplay,
   tap,
   zipWith,
-  Observable,
 } from "rxjs";
 
-import Delta, { DeltaType } from "../models/Delta";
-import Snapshot, { RawSnapshot } from "../models/Snapshot";
+import Delta from "../models/Delta";
+import Snapshot from "../models/Snapshot";
 import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
 import { getRoomDeltas, getRoomSnapshot } from "./Api";

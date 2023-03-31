@@ -2,19 +2,16 @@ import { Set } from "immutable";
 import { useEffect, useState } from "react";
 import {
   BehaviorSubject,
+  Observable,
   Subscription,
   filter,
   from,
   timer,
-  Observable,
 } from "rxjs";
 
 import RoomStateSyncManager from "../../../apis/RoomStateSyncManager";
 import webSocketManager from "../../../apis/WebSocketManager";
-import {
-  CurrentClientIdMessage,
-  WebSocketMessage,
-} from "../../../models/webSocketMessages";
+import { CurrentClientIdMessage } from "../../../models/webSocketMessages";
 import Logger from "../../../utils/Logger";
 import { useConst } from "../../hooks";
 import ClientBox from "./ClientBox";

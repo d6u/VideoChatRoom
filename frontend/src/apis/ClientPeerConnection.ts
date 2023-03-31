@@ -7,8 +7,8 @@ import {
   tap,
   timer,
 } from "rxjs";
-import { DirectMessage } from "../models/webSocketMessages";
 
+import { DirectMessage } from "../models/webSocketMessages";
 import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
 import PeerConnectionManager from "./PeerConnectionManager";
