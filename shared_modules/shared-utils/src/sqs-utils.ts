@@ -1,10 +1,10 @@
-import { SendMessageCommand } from "@aws-sdk/client-sqs";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
 export async function sendActionToRoomActionsQueue(
-  sqsClient,
-  groupId,
-  dedupId,
-  body
+  sqsClient: SQSClient,
+  groupId: string,
+  dedupId: string,
+  body: any
 ) {
   await sqsClient.send(
     new SendMessageCommand({

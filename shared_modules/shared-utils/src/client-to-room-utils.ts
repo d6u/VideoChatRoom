@@ -1,12 +1,16 @@
 import {
+  DeleteItemCommand,
+  DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
-  DeleteItemCommand,
 } from "@aws-sdk/client-dynamodb";
 
 const TABLE_NAME = process.env.TABLE_NAME_CLIENT_TO_ROOM;
 
-export async function getClientToRoomPair(dynamoDbClient, clientId) {
+export async function getClientToRoomPair(
+  dynamoDbClient: DynamoDBClient,
+  clientId: string
+) {
   return await dynamoDbClient.send(
     new GetItemCommand({
       TableName: TABLE_NAME,
@@ -17,7 +21,11 @@ export async function getClientToRoomPair(dynamoDbClient, clientId) {
   );
 }
 
-export async function createClientToRoomPair(dynamoDbClient, clientId, roomId) {
+export async function createClientToRoomPair(
+  dynamoDbClient: DynamoDBClient,
+  clientId: string,
+  roomId: string
+) {
   await dynamoDbClient.send(
     new PutItemCommand({
       TableName: TABLE_NAME,
@@ -29,7 +37,10 @@ export async function createClientToRoomPair(dynamoDbClient, clientId, roomId) {
   );
 }
 
-export async function deleteClientToRoomPair(dynamoDbClient, clientId) {
+export async function deleteClientToRoomPair(
+  dynamoDbClient: DynamoDBClient,
+  clientId: string
+) {
   await dynamoDbClient.send(
     new DeleteItemCommand({
       TableName: TABLE_NAME,

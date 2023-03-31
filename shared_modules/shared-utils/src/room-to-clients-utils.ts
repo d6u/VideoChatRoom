@@ -1,4 +1,5 @@
 import {
+  DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
   UpdateItemCommand,
@@ -6,7 +7,10 @@ import {
 
 const TABLE_NAME = process.env.TABLE_NAME_ROOM_TO_CLIENTS;
 
-export async function getRoomToClientsMap(dynamoDbClient, roomId) {
+export async function getRoomToClientsMap(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string
+) {
   return await dynamoDbClient.send(
     new GetItemCommand({
       TableName: TABLE_NAME,
@@ -17,7 +21,10 @@ export async function getRoomToClientsMap(dynamoDbClient, roomId) {
   );
 }
 
-export async function createRoomToClientsPlaceholder(dynamoDbClient, roomId) {
+export async function createRoomToClientsPlaceholder(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string
+) {
   await dynamoDbClient.send(
     new PutItemCommand({
       TableName: TABLE_NAME,
@@ -28,7 +35,11 @@ export async function createRoomToClientsPlaceholder(dynamoDbClient, roomId) {
   );
 }
 
-export async function addClientToRoom(dynamoDbClient, roomId, clientId) {
+export async function addClientToRoom(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string,
+  clientId: string
+) {
   await dynamoDbClient.send(
     new UpdateItemCommand({
       TableName: TABLE_NAME,
@@ -48,7 +59,11 @@ export async function addClientToRoom(dynamoDbClient, roomId, clientId) {
   );
 }
 
-export async function removeClientFromRoom(dynamoDbClient, roomId, clientId) {
+export async function removeClientFromRoom(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string,
+  clientId: string
+) {
   await dynamoDbClient.send(
     new UpdateItemCommand({
       TableName: TABLE_NAME,

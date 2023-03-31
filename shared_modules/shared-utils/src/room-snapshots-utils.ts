@@ -1,11 +1,15 @@
 import {
-  PutItemCommand,
+  DynamoDBClient,
   GetItemCommand,
+  PutItemCommand,
   QueryCommand,
   TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb";
 
-export async function createRoomSnapshot(dynamoDbClient, roomId) {
+export async function createRoomSnapshot(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string
+) {
   await dynamoDbClient.send(
     new PutItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -19,7 +23,10 @@ export async function createRoomSnapshot(dynamoDbClient, roomId) {
   );
 }
 
-export async function getRoomSnapshot(dynamoDbClient, roomId) {
+export async function getRoomSnapshot(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string
+) {
   return await dynamoDbClient.send(
     new GetItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -30,7 +37,12 @@ export async function getRoomSnapshot(dynamoDbClient, roomId) {
   );
 }
 
-export async function getRoomDeltas(dynamoDbClient, roomId, fromSeq, toSeq) {
+export async function getRoomDeltas(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string,
+  fromSeq: number,
+  toSeq: number
+) {
   return await dynamoDbClient.send(
     new QueryCommand({
       TableName: process.env.TABLE_NAME_ROOM_DELTAS,
@@ -46,7 +58,11 @@ export async function getRoomDeltas(dynamoDbClient, roomId, fromSeq, toSeq) {
   );
 }
 
-export async function applyClientJoinAction(dynamoDbClient, roomId, clientId) {
+export async function applyClientJoinAction(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string,
+  clientId: string
+) {
   const response = await dynamoDbClient.send(
     new GetItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -62,7 +78,7 @@ export async function applyClientJoinAction(dynamoDbClient, roomId, clientId) {
     return null;
   }
 
-  const newSeq = parseInt(response.Item.Seq.N) + 1;
+  const newSeq = parseInt(response.Item.Seq.N!) + 1;
 
   await dynamoDbClient.send(
     new TransactWriteItemsCommand({
@@ -100,7 +116,11 @@ export async function applyClientJoinAction(dynamoDbClient, roomId, clientId) {
   return newSeq;
 }
 
-export async function applyClientLeftAction(dynamoDbClient, roomId, clientId) {
+export async function applyClientLeftAction(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string,
+  clientId: string
+) {
   const response = await dynamoDbClient.send(
     new GetItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -116,7 +136,7 @@ export async function applyClientLeftAction(dynamoDbClient, roomId, clientId) {
     return null;
   }
 
-  const newSeq = parseInt(response.Item.Seq.N) + 1;
+  const newSeq = parseInt(response.Item.Seq.N!) + 1;
 
   await dynamoDbClient.send(
     new TransactWriteItemsCommand({
