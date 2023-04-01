@@ -1,0 +1,11 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.114",
+    "@types/node": "^18.15.11",
+    "nanoid": "^4.0.2",
+    "shared-utils": "file:../shared_modules/shared-utils",
+    "typescript": "^5.0.3"
+  }
+}
