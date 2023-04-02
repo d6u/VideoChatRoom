@@ -1,12 +1,16 @@
 import {
+  APIGatewayProxyWebsocketEventV2,
+  APIGatewayProxyWebsocketHandlerV2,
+} from "aws-lambda";
+import {
+  getApiGatewayManagement,
   getDynamoDbClient,
   getSqsClient,
-  getApiGatewayManagement,
 } from "shared-utils";
-import { addClientToRoom } from "shared-utils/room-to-clients-utils.js";
-import { sendActionToRoomActionsQueue } from "shared-utils/sqs-utils.js";
-import { createClientToRoomPair } from "shared-utils/client-to-room-utils.js";
-import { postToClient } from "shared-utils/api-gateway-management-utils.js";
+import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js";
+import { createClientToRoomPair } from "shared-utils/dist/client-to-room-utils.js";
+import { addClientToRoom } from "shared-utils/dist/room-to-clients-utils.js";
+import { sendActionToRoomActionsQueue } from "shared-utils/dist/sqs-utils.js";
 
 const ERROR_TYPES = {
   RoomNotFoundError: "RoomNotFoundError",
@@ -16,18 +20,18 @@ const ERROR_TYPES = {
   UpdateClientError: "UpdateClientError",
 };
 
-const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
-const sqsClient = getSqsClient(process.env.AWS_REGION);
+const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
+const sqsClient = getSqsClient(process.env.AWS_REGION!);
 const apiGatewayManagementApi = getApiGatewayManagement(
-  process.env.WEBSOCKET_API_ENDPOINT.replace("wss:", "https:")
+  process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
 );
 
-function parseEvent(event) {
+function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const {
     requestContext: { requestId, connectionId },
     body,
   } = event;
-  const { roomId } = JSON.parse(body);
+  const { roomId } = JSON.parse(body!) as { roomId: string };
   return {
     requestId,
     connectionId,
@@ -35,7 +39,10 @@ function parseEvent(event) {
   };
 }
 
-export async function handler(event, context) {
+export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
+  event,
+  context
+) => {
   console.log("Receiving event", event);
 
   const { requestId, connectionId, roomId } = parseEvent(event);
@@ -64,7 +71,7 @@ export async function handler(event, context) {
       roomId,
       connectionId
     );
-  } catch (error) {
+  } catch (error: any) {
     if (error.name === "ConditionalCheckFailedException") {
       console.error(`Room "${roomId}" not found.`);
       return {
@@ -125,4 +132,4 @@ export async function handler(event, context) {
   return {
     statusCode: 200,
   };
-}
+};

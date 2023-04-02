@@ -3,7 +3,7 @@ import { RawDelta } from "../models/Delta";
 import { RawSnapshot } from "../models/Snapshot";
 
 export async function createRoom(): Promise<{ roomId: string }> {
-  const response = await fetch(`${endpoints.http_endpoint_url}/rooms`, {
+  const response = await fetch(`${endpoints.HttpEndpointUrl}/rooms`, {
     method: "POST",
     mode: "cors",
   });
@@ -13,7 +13,7 @@ export async function createRoom(): Promise<{ roomId: string }> {
 
 export async function getRoomSnapshot(roomId: string): Promise<RawSnapshot> {
   const response = await fetch(
-    `${endpoints.http_endpoint_url}/rooms/${roomId}/snapshot`,
+    `${endpoints.HttpEndpointUrl}/rooms/${roomId}/snapshot`,
     {
       method: "GET",
       mode: "cors",
@@ -29,7 +29,7 @@ export async function getRoomDeltas(
   toSeq: number
 ): Promise<RawDelta[]> {
   const response = await fetch(
-    `${endpoints.http_endpoint_url}/rooms/${roomId}/deltas?fromSeq=${fromSeq}&toSeq=${toSeq}`,
+    `${endpoints.HttpEndpointUrl}/rooms/${roomId}/deltas?fromSeq=${fromSeq}&toSeq=${toSeq}`,
     {
       method: "GET",
       mode: "cors",

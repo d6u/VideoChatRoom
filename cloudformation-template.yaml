@@ -1,19 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  Multiline string placeholder.
+  A hobby project for real time synchronization between clients and server.
 Parameters:
-  LambdaSourceS3KeyConnect:
-    Type: String
-  LambdaSourceS3KeyDisconnect:
-    Type: String
-  LambdaSourceS3KeyDefault:
-    Type: String
-  LambdaSourceS3KeyJoinRoom:
-    Type: String
-  LambdaSourceS3KeyDirectMessage:
-    Type: String
-  LambdaSourceS3KeyRoomAction:
-    Type: String
   ServerSourceS3Key:
     Type: String
 Resources:
@@ -439,11 +427,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/websocket/connect/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyConnect
+        S3Key: !Ref ServerSourceS3Key
       TracingConfig:
         Mode: Active
   LambdaPermissionConnect:
@@ -488,11 +476,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/websocket/default/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyDefault
+        S3Key: !Ref ServerSourceS3Key
       TracingConfig:
         Mode: Active
   LambdaPermissionDefault:
@@ -525,11 +513,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/websocket/disconnect/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyDisconnect
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
@@ -569,11 +557,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/websocket/JoinRoom/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyJoinRoom
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
@@ -614,11 +602,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/websocket/DirectMessage/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyDirectMessage
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
@@ -645,6 +633,10 @@ Resources:
       FifoQueue: true
   LambdaEventSourceMappingRoomAction:
     Type: AWS::Lambda::EventSourceMapping
+    # Must wait until the needed policy is created, otherwise will error due to
+    # lack of permission.
+    DependsOn:
+      - IamPolicyLambdaInteractSqs
     Properties:
       FunctionName: !Ref LambdaFunctionRoomAction
       EventSourceArn: !GetAtt SqsQueueRoomActions.Arn
@@ -654,11 +646,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/sqs/RoomAction/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyRoomAction
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots

@@ -1,9 +1,0 @@
-{
-  "name": "websocket-direct-message",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "index.js",
-  "dependencies": {
-    "shared-utils": "file:../../../shared_modules/shared-utils"
-  }
-}

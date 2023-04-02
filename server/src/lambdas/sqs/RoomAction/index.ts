@@ -1,17 +1,19 @@
-import { getDynamoDbClient, getApiGatewayManagement } from "shared-utils";
-import { getRoomToClientsMap } from "shared-utils/room-to-clients-utils.js";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { SQSEvent, SQSRecord } from "aws-lambda";
+import { getApiGatewayManagement, getDynamoDbClient } from "shared-utils";
+import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js";
 import {
   applyClientJoinAction,
   applyClientLeftAction,
-} from "shared-utils/room-snapshots-utils.js";
-import { postToClient } from "shared-utils/api-gateway-management-utils.js";
+} from "shared-utils/dist/room-snapshots-utils";
+import { getRoomToClientsMap } from "shared-utils/dist/room-to-clients-utils";
 
-const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION);
+const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const apiGatewayManagementApi = getApiGatewayManagement(
-  process.env.WEBSOCKET_API_ENDPOINT.replace("wss:", "https:")
+  process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
 );
 
-export async function handler(event, context) {
+export async function handler(event: SQSEvent) {
   console.log("Handling event.", event);
 
   await Promise.all(
@@ -29,7 +31,7 @@ export async function handler(event, context) {
   return {};
 }
 
-async function processRecord(record) {
+async function processRecord(record: SQSRecord) {
   console.log("Processing record.", record);
 
   const body = JSON.parse(record.body);
@@ -46,8 +48,13 @@ async function processRecord(record) {
   }
 }
 
-async function handleClientJoinAction(body) {
-  const { roomId, clientId } = body;
+async function handleClientJoinAction({
+  roomId,
+  clientId,
+}: {
+  roomId: string;
+  clientId: string;
+}) {
   try {
     const seq = await applyClientJoinAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {
@@ -55,7 +62,7 @@ async function handleClientJoinAction(body) {
         dynamoDbClient,
         roomId
       );
-      await postToClients(clientIds, roomId, {
+      await postToClients(clientIds!, roomId, {
         isDelta: true,
         type: "ClientJoin",
         seq,
@@ -67,8 +74,13 @@ async function handleClientJoinAction(body) {
   }
 }
 
-async function handleClientLeftAction(body) {
-  const { roomId, clientId } = body;
+async function handleClientLeftAction({
+  roomId,
+  clientId,
+}: {
+  roomId: string;
+  clientId: string;
+}) {
   try {
     const seq = await applyClientLeftAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {
@@ -76,7 +88,7 @@ async function handleClientLeftAction(body) {
         dynamoDbClient,
         roomId
       );
-      await postToClients(clientIds, roomId, {
+      await postToClients(clientIds!, roomId, {
         isDelta: true,
         type: "ClientLeft",
         seq,
@@ -88,7 +100,10 @@ async function handleClientLeftAction(body) {
   }
 }
 
-async function getClientIdsForBroadcasting(dynamoDbClient, roomId) {
+async function getClientIdsForBroadcasting(
+  dynamoDbClient: DynamoDBClient,
+  roomId: string
+) {
   try {
     const response = await getRoomToClientsMap(dynamoDbClient, roomId);
     console.log(`Getting room ${roomId} succeeded.`, response);
@@ -105,11 +120,11 @@ async function getClientIdsForBroadcasting(dynamoDbClient, roomId) {
   return [];
 }
 
-async function postToClients(clientIds, roomId, data) {
+async function postToClients(clientIds: string[], roomId: string, data: any) {
   const postToConnectionCalls = clientIds.map(async (connectionId) => {
     try {
       await postToClient(apiGatewayManagementApi, connectionId, data);
-    } catch (error) {
+    } catch (error: any) {
       if (error["$metadata"]?.httpStatusCode === 410) {
         console.warn(`found stale connection ${connectionId}`);
       } else {

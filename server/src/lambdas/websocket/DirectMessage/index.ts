@@ -1,16 +1,23 @@
+import {
+  APIGatewayProxyWebsocketEventV2,
+  APIGatewayProxyWebsocketHandlerV2,
+} from "aws-lambda";
 import { getApiGatewayManagement } from "shared-utils";
-import { postToClient } from "shared-utils/api-gateway-management-utils.js";
+import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js";
 
 const apiGatewayManagementApi = getApiGatewayManagement(
-  process.env.WEBSOCKET_API_ENDPOINT.replace("wss:", "https:")
+  process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
 );
 
-function parseEvent(event) {
+function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const {
     requestContext: { routeKey, connectionId },
     body,
   } = event;
-  const { toClientId, message } = JSON.parse(body);
+  const { toClientId, message } = JSON.parse(body!) as {
+    toClientId: string;
+    message: string;
+  };
   return {
     routeKey,
     connectionId,
@@ -19,7 +26,10 @@ function parseEvent(event) {
   };
 }
 
-export async function handler(event, context) {
+export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
+  event,
+  context
+) => {
   console.log("handling event", event);
 
   const {
@@ -36,15 +46,15 @@ export async function handler(event, context) {
       fromClientId,
       message,
     });
-  } catch (error) {
+  } catch (error: any) {
     if (error["$metadata"]?.httpStatusCode === 410) {
-      console.warn(`found stale connection ${connectionId}`);
+      console.warn(`found stale connection ${toClientId}`);
     } else {
-      console.error(`posting to connection ${connectionId} failed`, error);
+      console.error(`posting to connection ${toClientId} failed`, error);
     }
   }
 
   return {
     statusCode: 200,
   };
-}
+};

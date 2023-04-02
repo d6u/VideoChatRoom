@@ -22,7 +22,7 @@ class WebSocketManager {
     this.logger = new Logger("WebSocketManager");
 
     this.webSocketSubject = webSocket({
-      url: endpoints.websocket_endpoint_url,
+      url: endpoints.WebSocketEndpointUrl,
       openObserver: {
         next: (data) => {
           this.logger.debug("^^^ connection open");
