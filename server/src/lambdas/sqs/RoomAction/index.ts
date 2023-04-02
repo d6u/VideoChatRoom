@@ -5,8 +5,8 @@ import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js"
 import {
   applyClientJoinAction,
   applyClientLeftAction,
-} from "shared-utils/dist/room-snapshots-utils";
-import { getRoomToClientsMap } from "shared-utils/dist/room-to-clients-utils";
+} from "shared-utils/dist/room-snapshots-utils.js";
+import { getRoomToClientsMap } from "shared-utils/dist/room-to-clients-utils.js";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const apiGatewayManagementApi = getApiGatewayManagement(
