@@ -1,6 +1,7 @@
 {
   "name": "server",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "@types/aws-lambda": "^8.10.114",
     "@types/node": "^18.15.11",

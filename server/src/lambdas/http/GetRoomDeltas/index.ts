@@ -1,31 +1,25 @@
-import { APIGatewayEvent, APIGatewayProxyResult } from "aws-lambda";
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { getDynamoDbClient } from "shared-utils";
 import { getRoomDeltas } from "shared-utils/dist/room-snapshots-utils.js";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 
-function parseEvent(event: APIGatewayEvent) {
-  const { queryStringParameters } = event;
+function parseEvent(event: APIGatewayProxyEventV2) {
+  const roomId = event.pathParameters!.roomId as string;
   let fromSeq = null;
   let toSeq = null;
-  if (queryStringParameters != null) {
-    if (queryStringParameters.fromSeq != null) {
-      fromSeq = parseInt(queryStringParameters.fromSeq);
-    }
-    if (queryStringParameters.toSeq != null) {
-      toSeq = parseInt(queryStringParameters.toSeq);
-    }
+  if (event.queryStringParameters?.fromSeq != null) {
+    fromSeq = parseInt(event.queryStringParameters.fromSeq);
   }
-  return {
-    roomId: event.pathParameters!.roomId as string,
-    fromSeq,
-    toSeq,
-  };
+  if (event.queryStringParameters?.toSeq != null) {
+    toSeq = parseInt(event.queryStringParameters.toSeq);
+  }
+  return { roomId, fromSeq, toSeq };
 }
 
 export async function handler(
-  event: APIGatewayEvent
-): Promise<APIGatewayProxyResult> {
+  event: APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResultV2> {
   console.log(event);
   const parsedParmas = parseEvent(event);
   console.log(parsedParmas);
@@ -56,7 +50,6 @@ export async function handler(
   if (response == null || response.Items == null || response.Count === 0) {
     return {
       statusCode: 404,
-      body: "",
     };
   }
 

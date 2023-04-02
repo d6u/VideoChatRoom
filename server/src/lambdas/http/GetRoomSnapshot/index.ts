@@ -1,16 +1,16 @@
-import { APIGatewayEvent, APIGatewayProxyResult } from "aws-lambda";
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { getDynamoDbClient } from "shared-utils";
 import { getRoomSnapshot } from "shared-utils/dist/room-snapshots-utils.js";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 
-function parseEvent(event: APIGatewayEvent) {
+function parseEvent(event: APIGatewayProxyEventV2) {
   return { roomId: event.pathParameters!.roomId as string };
 }
 
 export async function handler(
-  event: APIGatewayEvent
-): Promise<APIGatewayProxyResult> {
+  event: APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResultV2> {
   console.log(event);
   const { roomId } = parseEvent(event);
 
@@ -30,7 +30,6 @@ export async function handler(
   if (response == null || response.Item == null) {
     return {
       statusCode: 404,
-      body: "",
     };
   }
 

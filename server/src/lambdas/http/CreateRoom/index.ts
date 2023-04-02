@@ -1,4 +1,4 @@
-import { APIGatewayEvent, APIGatewayProxyResult } from "aws-lambda";
+import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { nanoid } from "nanoid";
 import { getDynamoDbClient } from "shared-utils";
 import { createRoomSnapshot } from "shared-utils/dist/room-snapshots-utils.js";
@@ -7,8 +7,8 @@ import { createRoomToClientsPlaceholder } from "shared-utils/dist/room-to-client
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 
 export const handler = async (
-  event: APIGatewayEvent
-): Promise<APIGatewayProxyResult> => {
+  event: APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResultV2> => {
   const roomId = nanoid();
 
   console.log(`Creating a new room ${roomId}.`);

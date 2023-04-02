@@ -2,12 +2,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >
   Multiline string placeholder.
 Parameters:
-  LambdaSourceS3KeyCreateRoom:
-    Type: String
-  LambdaSourceS3KeyGetRoomDeltas:
-    Type: String
-  LambdaSourceS3KeyGetRoomSnapshot:
-    Type: String
   LambdaSourceS3KeyConnect:
     Type: String
   LambdaSourceS3KeyDisconnect:
@@ -19,6 +13,8 @@ Parameters:
   LambdaSourceS3KeyDirectMessage:
     Type: String
   LambdaSourceS3KeyRoomAction:
+    Type: String
+  ServerSourceS3Key:
     Type: String
 Resources:
   # --- Lambda IAM ---
@@ -286,11 +282,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/http/CreateRoom/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyCreateRoom
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
@@ -331,11 +327,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/http/GetRoomDeltas/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyGetRoomDeltas
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
@@ -376,11 +372,11 @@ Resources:
       Architectures:
         - arm64
       Runtime: nodejs18.x
-      Handler: index.handler
+      Handler: dist/lambdas/http/GetRoomSnapshot/index.handler
       Role: !GetAtt IamRoleLambdaShared.Arn
       Code:
         S3Bucket: gameroom-deployment
-        S3Key: !Ref LambdaSourceS3KeyGetRoomSnapshot
+        S3Key: !Ref ServerSourceS3Key
       Environment:
         Variables:
           TABLE_NAME_ROOM_SNAPSHOTS: !Ref DynamoDbTableRoomSnapshots
