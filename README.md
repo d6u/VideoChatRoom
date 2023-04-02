@@ -1,5 +1,7 @@
 ## Deploy
 
+For both server and frontend:
+
 ```
 ./deploy.sh
 ```

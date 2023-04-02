@@ -13,7 +13,7 @@ participant Client2
 == one client ==
 
 ' WebSocket connect
-Client1 ->(10) APIGateway1 : $connect
+Client1 -> APIGateway1 : $connect
   APIGateway1 -> Lambda1 : handler
   return 200
 return
