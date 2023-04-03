@@ -6,11 +6,12 @@ import {
   WebSocketActionDirectMessage,
   WebSocketMessageType,
 } from "shared-models";
-import { getApiGatewayManagement } from "shared-utils";
+
 import {
   errorIsGoneException,
+  getApiGatewayManagement,
   postToClient,
-} from "shared-utils/dist/api-gateway-management-utils.js";
+} from "../../../utils/api-gateway-management-utils";
 
 const apiGatewayManagementApi = getApiGatewayManagement(
   process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")

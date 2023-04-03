@@ -1,8 +1,9 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { nanoid } from "nanoid";
-import { getDynamoDbClient } from "shared-utils";
-import { createRoomSnapshot } from "shared-utils/dist/room-snapshots-utils.js";
-import { createRoomToClientsPlaceholder } from "shared-utils/dist/room-to-clients-utils.js";
+
+import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
+import { createRoomSnapshot } from "../../../utils/room-snapshots-utils";
+import { createRoomToClientsPlaceholder } from "../../../utils/room-to-clients-utils";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 

@@ -1,6 +1,10 @@
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { SqsMessageBody } from "shared-models";
 
+export function getSqsClient(region: string) {
+  return new SQSClient({ region });
+}
+
 export async function sendActionToRoomActionsQueue(
   sqsClient: SQSClient,
   groupId: string,

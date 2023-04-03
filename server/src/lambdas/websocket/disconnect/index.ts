@@ -3,13 +3,17 @@ import {
   APIGatewayProxyWebsocketHandlerV2,
 } from "aws-lambda";
 import { SqsMessageBodyAction } from "shared-models";
-import { getDynamoDbClient, getSqsClient } from "shared-utils";
+
 import {
   deleteClientToRoomPair,
   getClientToRoomPair,
-} from "shared-utils/dist/client-to-room-utils.js";
-import { removeClientFromRoom } from "shared-utils/dist/room-to-clients-utils.js";
-import { sendActionToRoomActionsQueue } from "shared-utils/dist/sqs-utils.js";
+} from "../../../utils/client-to-room-utils";
+import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
+import { removeClientFromRoom } from "../../../utils/room-to-clients-utils";
+import {
+  getSqsClient,
+  sendActionToRoomActionsQueue,
+} from "../../../utils/sqs-utils";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const sqsClient = getSqsClient(process.env.AWS_REGION!);

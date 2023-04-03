@@ -7,6 +7,10 @@ import { WebSocketMessage } from "shared-models";
 
 const encoder = new TextEncoder();
 
+export function getApiGatewayManagement(endpoint: string) {
+  return new ApiGatewayManagementApi({ endpoint });
+}
+
 export async function postToClient(
   apiGatewayManagementApi: ApiGatewayManagementApi,
   connectionId: string,

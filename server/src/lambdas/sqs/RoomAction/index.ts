@@ -6,20 +6,19 @@ import {
   SqsMessageBody,
   SqsMessageBodyAction,
 } from "shared-models";
-import {
-  exhaustiveMatchingGuard,
-  getApiGatewayManagement,
-  getDynamoDbClient,
-} from "shared-utils";
+import { exhaustiveMatchingGuard } from "shared-utils";
+
 import {
   errorIsGoneException,
+  getApiGatewayManagement,
   postToClient,
-} from "shared-utils/dist/api-gateway-management-utils.js";
+} from "../../../utils/api-gateway-management-utils";
+import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
 import {
   applyClientJoinAction,
   applyClientLeftAction,
-} from "shared-utils/dist/room-snapshots-utils.js";
-import { getRoomToClientsMap } from "shared-utils/dist/room-to-clients-utils.js";
+} from "../../../utils/room-snapshots-utils";
+import { getRoomToClientsMap } from "../../../utils/room-to-clients-utils";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const apiGatewayManagementApi = getApiGatewayManagement(

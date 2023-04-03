@@ -9,18 +9,19 @@ import {
   WebSocketMessageCurrentClientId,
   WebSocketMessageType,
 } from "shared-models";
-import {
-  getApiGatewayManagement,
-  getDynamoDbClient,
-  getSqsClient,
-} from "shared-utils";
+
 import {
   errorIsGoneException,
+  getApiGatewayManagement,
   postToClient,
-} from "shared-utils/dist/api-gateway-management-utils.js";
-import { createClientToRoomPair } from "shared-utils/dist/client-to-room-utils.js";
-import { addClientToRoom } from "shared-utils/dist/room-to-clients-utils.js";
-import { sendActionToRoomActionsQueue } from "shared-utils/dist/sqs-utils.js";
+} from "../../../utils/api-gateway-management-utils";
+import { createClientToRoomPair } from "../../../utils/client-to-room-utils";
+import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
+import { addClientToRoom } from "../../../utils/room-to-clients-utils";
+import {
+  getSqsClient,
+  sendActionToRoomActionsQueue,
+} from "../../../utils/sqs-utils";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const sqsClient = getSqsClient(process.env.AWS_REGION!);

@@ -1,6 +1,7 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
-import { getDynamoDbClient } from "shared-utils";
-import { getRoomSnapshot } from "shared-utils/dist/room-snapshots-utils.js";
+
+import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
+import { getRoomSnapshot } from "../../../utils/room-snapshots-utils";
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 
