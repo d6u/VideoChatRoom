@@ -7,15 +7,23 @@ import { WebSocketMessage } from "shared-models";
 
 const encoder = new TextEncoder();
 
-export function getApiGatewayManagement(endpoint: string) {
-  return new ApiGatewayManagementApi({ endpoint });
+let apiGatewayManagementApi: ApiGatewayManagementApi | null = null;
+
+export function getApiGatewayManagement() {
+  if (apiGatewayManagementApi == null) {
+    apiGatewayManagementApi = new ApiGatewayManagementApi({
+      endpoint: process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:"),
+    });
+  }
+  return apiGatewayManagementApi;
 }
 
 export async function postToClient(
-  apiGatewayManagementApi: ApiGatewayManagementApi,
   connectionId: string,
   data: WebSocketMessage
 ) {
+  const apiGatewayManagementApi = getApiGatewayManagement();
+
   await (apiGatewayManagementApi.postToConnection({
     ConnectionId: connectionId,
     Data: encoder.encode(JSON.stringify(data)),

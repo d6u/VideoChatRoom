@@ -23,9 +23,6 @@ import {
 } from "../../../utils/sqs-utils";
 
 const sqsClient = getSqsClient(process.env.AWS_REGION!);
-const apiGatewayManagementApi = getApiGatewayManagement(
-  process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
-);
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const action = JSON.parse(event.body!) as WebSocketActionJoinRoom;
@@ -52,7 +49,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
     clientId: connectionId,
   };
 
-  postToClient(apiGatewayManagementApi, connectionId, message).catch(
+  postToClient(connectionId, message).catch(
     (error: ApiGatewayManagementApiServiceException) => {
       if (errorIsGoneException(error)) {
         console.warn(`found stale connection ${connectionId}`);

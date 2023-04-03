@@ -9,13 +9,8 @@ import {
 
 import {
   errorIsGoneException,
-  getApiGatewayManagement,
   postToClient,
 } from "../../../utils/api-gateway-management-utils";
-
-const apiGatewayManagementApi = getApiGatewayManagement(
-  process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
-);
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const message = JSON.parse(event.body!) as WebSocketActionDirectMessage;
@@ -35,7 +30,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   const { connectionId: fromClientId, toClientId, message } = parseEvent(event);
 
   try {
-    await postToClient(apiGatewayManagementApi, toClientId, {
+    await postToClient(toClientId, {
       isDelta: false,
       type: WebSocketMessageType.DirectMessage,
       fromClientId,

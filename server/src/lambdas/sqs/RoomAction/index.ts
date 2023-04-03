@@ -8,16 +8,11 @@ import {
 } from "shared-models";
 import { exhaustiveMatchingGuard } from "shared-utils";
 
-import { getApiGatewayManagement } from "../../../utils/api-gateway-management-utils";
 import {
   applyClientJoinAction,
   applyClientLeftAction,
 } from "../../../utils/room-snapshots-utils";
 import { postDataToRoom } from "../../../utils/room-utils";
-
-const apiGatewayManagementApi = getApiGatewayManagement(
-  process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
-);
 
 export async function handler(event: SQSEvent) {
   console.log("Handling event.", event);
@@ -61,7 +56,7 @@ async function handleClientJoinAction({
   try {
     const seq = await applyClientJoinAction(roomId, clientId);
     if (seq != null) {
-      await postDataToRoom(apiGatewayManagementApi, roomId, {
+      await postDataToRoom(roomId, {
         isDelta: true,
         type: WebSocketMessageType.ClientJoin,
         seq,
@@ -80,7 +75,7 @@ async function handleClientLeftAction({
   try {
     const seq = await applyClientLeftAction(roomId, clientId);
     if (seq != null) {
-      await postDataToRoom(apiGatewayManagementApi, roomId, {
+      await postDataToRoom(roomId, {
         isDelta: true,
         type: WebSocketMessageType.ClientLeft,
         seq,

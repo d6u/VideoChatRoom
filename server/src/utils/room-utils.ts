@@ -1,5 +1,3 @@
-import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { WebSocketMessage } from "shared-models";
 
 import {
@@ -8,13 +6,9 @@ import {
 } from "./api-gateway-management-utils";
 import { getRoomToClientsMap } from "./room-to-clients-utils";
 
-export async function postDataToRoom(
-  apiGatewayManagementApi: ApiGatewayManagementApi,
-  roomId: string,
-  data: WebSocketMessage
-) {
+export async function postDataToRoom(roomId: string, data: WebSocketMessage) {
   const clientIds = await getClientIdsForBroadcasting(roomId);
-  await postToClients(apiGatewayManagementApi, clientIds!, data);
+  await postToClients(clientIds!, data);
 }
 
 async function getClientIdsForBroadcasting(roomId: string) {
@@ -30,14 +24,10 @@ async function getClientIdsForBroadcasting(roomId: string) {
   return [];
 }
 
-async function postToClients(
-  apiGatewayManagementApi: ApiGatewayManagementApi,
-  clientIds: string[],
-  data: WebSocketMessage
-) {
+async function postToClients(clientIds: string[], data: WebSocketMessage) {
   const postToConnectionCalls = clientIds.map(async (connectionId) => {
     try {
-      await postToClient(apiGatewayManagementApi, connectionId, data);
+      await postToClient(connectionId, data);
     } catch (error: any) {
       if (errorIsGoneException(error)) {
         console.warn(`found stale connection ${connectionId}`);
