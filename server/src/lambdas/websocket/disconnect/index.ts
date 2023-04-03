@@ -8,14 +8,12 @@ import {
   deleteClientToRoomPair,
   getClientToRoomPair,
 } from "../../../utils/client-to-room-utils";
-import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
 import { removeClientFromRoom } from "../../../utils/room-to-clients-utils";
 import {
   getSqsClient,
   sendActionToRoomActionsQueue,
 } from "../../../utils/sqs-utils";
 
-const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const sqsClient = getSqsClient(process.env.AWS_REGION!);
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
@@ -35,7 +33,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
 
   let response = null;
   try {
-    response = await getClientToRoomPair(dynamoDbClient, connectionId);
+    response = await getClientToRoomPair(connectionId);
   } catch (error) {
     console.error(`Getting client "${connectionId}" failed.`, error);
     return { statusCode: 500 };
@@ -47,7 +45,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
     const roomId = response.Item!.RoomId.S!;
 
     try {
-      await removeClientFromRoom(dynamoDbClient, roomId, connectionId);
+      await removeClientFromRoom(roomId, connectionId);
     } catch (error) {
       console.error(
         `Deleting client "${connectionId}" from room ${roomId} failed.`,
@@ -69,7 +67,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   }
 
   try {
-    await deleteClientToRoomPair(dynamoDbClient, connectionId);
+    await deleteClientToRoomPair(connectionId);
   } catch (error: any) {
     console.error(`Deleting client "${connectionId}" failed.`, error);
     return { statusCode: 500 };

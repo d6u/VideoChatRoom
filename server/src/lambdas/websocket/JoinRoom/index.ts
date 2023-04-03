@@ -16,14 +16,12 @@ import {
   postToClient,
 } from "../../../utils/api-gateway-management-utils";
 import { createClientToRoomPair } from "../../../utils/client-to-room-utils";
-import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
 import { addClientToRoom } from "../../../utils/room-to-clients-utils";
 import {
   getSqsClient,
   sendActionToRoomActionsQueue,
 } from "../../../utils/sqs-utils";
 
-const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const sqsClient = getSqsClient(process.env.AWS_REGION!);
 const apiGatewayManagementApi = getApiGatewayManagement(
   process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
@@ -69,11 +67,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   console.log(`Adding client ID ${connectionId} to room "${roomId}".`);
   let addClientIdToRoomResponse = null;
   try {
-    addClientIdToRoomResponse = await addClientToRoom(
-      dynamoDbClient,
-      roomId,
-      connectionId
-    );
+    addClientIdToRoomResponse = await addClientToRoom(roomId, connectionId);
   } catch (error: any) {
     if (error.name === "ConditionalCheckFailedException") {
       console.error(`Room "${roomId}" not found.`);
@@ -93,7 +87,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   // === Create client to room pair ===
 
   try {
-    await createClientToRoomPair(dynamoDbClient, connectionId, roomId);
+    await createClientToRoomPair(connectionId, roomId);
   } catch (error) {
     console.error(
       `Creating client "${connectionId}" to room "${roomId}" failed.`,

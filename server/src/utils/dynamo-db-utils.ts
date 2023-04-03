@@ -1,5 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
-export function getDynamoDbClient(region: string) {
-  return new DynamoDBClient({ region });
+let dynamoDbClient: DynamoDBClient | null = null;
+
+export function getDynamoDbClient() {
+  if (dynamoDbClient == null) {
+    dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION! });
+  }
+  return dynamoDbClient;
 }

@@ -1,15 +1,15 @@
 import {
-  DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
   QueryCommand,
   TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb";
 
-export async function createRoomSnapshot(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string
-) {
+import { getDynamoDbClient } from "./dynamo-db-utils";
+
+export async function createRoomSnapshot(roomId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   await dynamoDbClient.send(
     new PutItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -23,10 +23,9 @@ export async function createRoomSnapshot(
   );
 }
 
-export async function getRoomSnapshot(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string
-) {
+export async function getRoomSnapshot(roomId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   return await dynamoDbClient.send(
     new GetItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -38,11 +37,12 @@ export async function getRoomSnapshot(
 }
 
 export async function getRoomDeltas(
-  dynamoDbClient: DynamoDBClient,
   roomId: string,
   fromSeq: number,
   toSeq: number
 ) {
+  const dynamoDbClient = getDynamoDbClient();
+
   return await dynamoDbClient.send(
     new QueryCommand({
       TableName: process.env.TABLE_NAME_ROOM_DELTAS,
@@ -58,11 +58,9 @@ export async function getRoomDeltas(
   );
 }
 
-export async function applyClientJoinAction(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string,
-  clientId: string
-) {
+export async function applyClientJoinAction(roomId: string, clientId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   const response = await dynamoDbClient.send(
     new GetItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,
@@ -116,11 +114,9 @@ export async function applyClientJoinAction(
   return newSeq;
 }
 
-export async function applyClientLeftAction(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string,
-  clientId: string
-) {
+export async function applyClientLeftAction(roomId: string, clientId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   const response = await dynamoDbClient.send(
     new GetItemCommand({
       TableName: process.env.TABLE_NAME_ROOM_SNAPSHOTS,

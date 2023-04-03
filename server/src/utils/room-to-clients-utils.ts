@@ -5,12 +5,13 @@ import {
   UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
 
+import { getDynamoDbClient } from "./dynamo-db-utils";
+
 const TABLE_NAME = process.env.TABLE_NAME_ROOM_TO_CLIENTS;
 
-export async function getRoomToClientsMap(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string
-) {
+export async function getRoomToClientsMap(roomId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   return await dynamoDbClient.send(
     new GetItemCommand({
       TableName: TABLE_NAME,
@@ -21,10 +22,9 @@ export async function getRoomToClientsMap(
   );
 }
 
-export async function createRoomToClientsPlaceholder(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string
-) {
+export async function createRoomToClientsPlaceholder(roomId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   await dynamoDbClient.send(
     new PutItemCommand({
       TableName: TABLE_NAME,
@@ -35,11 +35,9 @@ export async function createRoomToClientsPlaceholder(
   );
 }
 
-export async function addClientToRoom(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string,
-  clientId: string
-) {
+export async function addClientToRoom(roomId: string, clientId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   await dynamoDbClient.send(
     new UpdateItemCommand({
       TableName: TABLE_NAME,
@@ -59,11 +57,9 @@ export async function addClientToRoom(
   );
 }
 
-export async function removeClientFromRoom(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string,
-  clientId: string
-) {
+export async function removeClientFromRoom(roomId: string, clientId: string) {
+  const dynamoDbClient = getDynamoDbClient();
+
   await dynamoDbClient.send(
     new UpdateItemCommand({
       TableName: TABLE_NAME,

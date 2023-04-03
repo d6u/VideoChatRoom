@@ -9,21 +9,17 @@ import {
 import { getRoomToClientsMap } from "./room-to-clients-utils";
 
 export async function postDataToRoom(
-  dynamoDbClient: DynamoDBClient,
   apiGatewayManagementApi: ApiGatewayManagementApi,
   roomId: string,
   data: WebSocketMessage
 ) {
-  const clientIds = await getClientIdsForBroadcasting(dynamoDbClient, roomId);
+  const clientIds = await getClientIdsForBroadcasting(roomId);
   await postToClients(apiGatewayManagementApi, clientIds!, data);
 }
 
-async function getClientIdsForBroadcasting(
-  dynamoDbClient: DynamoDBClient,
-  roomId: string
-) {
+async function getClientIdsForBroadcasting(roomId: string) {
   try {
-    const response = await getRoomToClientsMap(dynamoDbClient, roomId);
+    const response = await getRoomToClientsMap(roomId);
     console.log(`Getting room ${roomId} succeeded.`, response);
     if (response.Item?.ClientIds != null) {
       return response.Item.ClientIds.SS;

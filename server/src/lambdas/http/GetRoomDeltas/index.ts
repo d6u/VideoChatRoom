@@ -1,9 +1,6 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 
-import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
 import { getRoomDeltas } from "../../../utils/room-snapshots-utils";
-
-const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 
 function parseEvent(event: APIGatewayProxyEventV2) {
   const roomId = event.pathParameters!.roomId as string;
@@ -37,7 +34,7 @@ export async function handler(
 
   let response = null;
   try {
-    response = await getRoomDeltas(dynamoDbClient, roomId, fromSeq, toSeq);
+    response = await getRoomDeltas(roomId, fromSeq, toSeq);
   } catch (error) {
     console.error(error);
     return {

@@ -9,14 +9,12 @@ import {
 import { exhaustiveMatchingGuard } from "shared-utils";
 
 import { getApiGatewayManagement } from "../../../utils/api-gateway-management-utils";
-import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
 import {
   applyClientJoinAction,
   applyClientLeftAction,
 } from "../../../utils/room-snapshots-utils";
 import { postDataToRoom } from "../../../utils/room-utils";
 
-const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 const apiGatewayManagementApi = getApiGatewayManagement(
   process.env.WEBSOCKET_API_ENDPOINT!.replace("wss:", "https:")
 );
@@ -61,9 +59,9 @@ async function handleClientJoinAction({
   clientId,
 }: ClientJoinSqsMessageBody) {
   try {
-    const seq = await applyClientJoinAction(dynamoDbClient, roomId, clientId);
+    const seq = await applyClientJoinAction(roomId, clientId);
     if (seq != null) {
-      await postDataToRoom(dynamoDbClient, apiGatewayManagementApi, roomId, {
+      await postDataToRoom(apiGatewayManagementApi, roomId, {
         isDelta: true,
         type: WebSocketMessageType.ClientJoin,
         seq,
@@ -80,9 +78,9 @@ async function handleClientLeftAction({
   clientId,
 }: ClientLeftSqsMessageBody) {
   try {
-    const seq = await applyClientLeftAction(dynamoDbClient, roomId, clientId);
+    const seq = await applyClientLeftAction(roomId, clientId);
     if (seq != null) {
-      await postDataToRoom(dynamoDbClient, apiGatewayManagementApi, roomId, {
+      await postDataToRoom(apiGatewayManagementApi, roomId, {
         isDelta: true,
         type: WebSocketMessageType.ClientLeft,
         seq,
