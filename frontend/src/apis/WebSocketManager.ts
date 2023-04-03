@@ -1,30 +1,47 @@
-import { Observable, Subject, Subscription, tap } from "rxjs";
+import {
+  Observable,
+  Subject,
+  Subscription,
+  filter,
+  map,
+  partition,
+  share,
+  tap,
+} from "rxjs";
 import { WebSocketSubject, webSocket } from "rxjs/webSocket";
+import {
+  DirectMessage,
+  LeaderSelectionDirectMessage,
+  SignalingDirectMessage,
+  WebSocketAction,
+  WebSocketMessage,
+  filterForWebSocketMessageDirectMessage,
+  isLeaderSelectionMessage,
+} from "shared-models";
 
 import endpoints from "../api_endpoints.json";
-import { WebSocketMessage } from "../models/webSocketMessages";
 import Logger from "../utils/Logger";
 
 class WebSocketManager {
-  // public
   openObserver = new Subject<0>();
   closeObserver = new Subject<0>();
   messagesSubject = new Subject<WebSocketMessage>();
 
   private logger: Logger;
+  // For reasoning of using any, see definition of WebSocketSubject below.
   private webSocketSubject: WebSocketSubject<any>;
   private webSocketMessagesObservable: Observable<WebSocketMessage>;
   private subscription: Subscription | null = null;
 
-  // public methods
-
   constructor() {
     this.logger = new Logger("WebSocketManager");
 
-    this.webSocketSubject = webSocket({
+    // Cannot provide specific type for WebSocketSubject because the provided
+    // type definition force incoming and outgoing message to be the same type.
+    this.webSocketSubject = webSocket<any>({
       url: endpoints.WebSocketEndpointUrl,
       openObserver: {
-        next: (data) => {
+        next: () => {
           this.logger.debug("^^^ connection open");
           this.openObserver.next(0);
         },
@@ -44,7 +61,7 @@ class WebSocketManager {
           this.logger.debug(`<== [type: ${data.type}]`, data);
         },
         error: (error) => {
-          // There is no error detail for WebSocket errors.
+          // There is no error detail return by browser WebSocket API.
           this.logger.error("*** error", error);
         },
       })
@@ -67,9 +84,28 @@ class WebSocketManager {
     this.subscription?.unsubscribe();
   }
 
-  send(data: { action: string; [key: string]: any }) {
-    this.logger.debug(`==> [action: ${data.action}]`, data);
-    this.webSocketSubject.next(data);
+  send(action: WebSocketAction) {
+    this.logger.debug(`==> [action: ${action.action}]`, action);
+    this.webSocketSubject.next(action);
+  }
+
+  partitionDirectMessagesFromClientId(
+    fromClientId: string
+  ): [
+    Observable<LeaderSelectionDirectMessage>,
+    Observable<SignalingDirectMessage>
+  ] {
+    return partition<DirectMessage>(
+      this.messagesSubject.pipe(
+        filter(filterForWebSocketMessageDirectMessage(fromClientId)),
+        map((message) => message.message),
+        share()
+      ),
+      isLeaderSelectionMessage
+    ) as [
+      Observable<LeaderSelectionDirectMessage>,
+      Observable<SignalingDirectMessage>
+    ];
   }
 }
 

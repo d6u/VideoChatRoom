@@ -13,3 +13,7 @@ export function getDynamoDbClient(region: string) {
 export function getSqsClient(region: string) {
   return new SQSClient({ region });
 }
+
+export function exhaustiveMatchingGuard(_: never): never {
+  throw new Error(`Should never reach here.`);
+}

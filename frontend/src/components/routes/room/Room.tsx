@@ -8,10 +8,10 @@ import {
   from,
   timer,
 } from "rxjs";
+import { WebSocketMessageCurrentClientId } from "shared-models";
 
 import RoomStateSyncManager from "../../../apis/RoomStateSyncManager";
 import webSocketManager from "../../../apis/WebSocketManager";
-import { CurrentClientIdMessage } from "../../../models/webSocketMessages";
 import Logger from "../../../utils/Logger";
 import { useConst } from "../../hooks";
 import ClientBox from "./ClientBox";
@@ -77,7 +77,7 @@ export default function Room({ roomId }: { roomId: string }) {
       (
         webSocketManager.messagesSubject.pipe(
           filter((m) => !m.isDelta && m.type === "CurrentClientId")
-        ) as Observable<CurrentClientIdMessage>
+        ) as Observable<WebSocketMessageCurrentClientId>
       ).subscribe(({ clientId }) => setCurrentClientId(clientId))
     );
 

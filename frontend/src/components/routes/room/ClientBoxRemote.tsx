@@ -1,33 +1,9 @@
 import classNames from "classnames";
 import { useEffect, useRef, useState } from "react";
-import {
-  OperatorFunction,
-  Subject,
-  Subscription,
-  filter,
-  map,
-  partition,
-  share,
-  takeWhile,
-} from "rxjs";
+import { Subject, Subscription, takeWhile } from "rxjs";
 
 import ClientPeerConnection from "../../../apis/ClientPeerConnection";
 import webSocketManager from "../../../apis/WebSocketManager";
-import {
-  DirectMessage,
-  DirectMessageMessage,
-  WebSocketMessage,
-} from "../../../models/webSocketMessages";
-
-function filterDirectMessage(clientId: string) {
-  return function (data: WebSocketMessage) {
-    return (
-      !data.isDelta &&
-      data.type === "DirectMessage" &&
-      data.fromClientId === clientId
-    );
-  };
-}
 
 export default function ClientBoxRemote({
   clientId,
@@ -76,19 +52,7 @@ export default function ClientBoxRemote({
     const [
       leaderSelectionMessagesObservable,
       signalingRemoteMessageObservable,
-    ] = partition<DirectMessage>(
-      webSocketManager.messagesSubject.pipe(
-        filter(filterDirectMessage(clientId)) as OperatorFunction<
-          WebSocketMessage,
-          DirectMessageMessage
-        >,
-        map((data) => data.message),
-        share()
-      ),
-      (message) =>
-        message.type === "SelectingLeader" ||
-        message.type === "ConfirmingLeader"
-    );
+    ] = webSocketManager.partitionDirectMessagesFromClientId(clientId);
 
     refClientPeerConnection.current!.startConnectionProcess({
       leaderSelectionMessagesObservable: leaderSelectionMessagesObservable.pipe(

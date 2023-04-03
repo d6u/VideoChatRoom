@@ -1,6 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SQSEvent, SQSRecord } from "aws-lambda";
-import { getApiGatewayManagement, getDynamoDbClient } from "shared-utils";
+import {
+  SqsMessageBody,
+  SqsMessageClientJoin,
+  SqsMessageClientLeft,
+} from "shared-models";
+import {
+  exhaustiveMatchingGuard,
+  getApiGatewayManagement,
+  getDynamoDbClient,
+} from "shared-utils";
 import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js";
 import {
   applyClientJoinAction,
@@ -34,7 +43,7 @@ export async function handler(event: SQSEvent) {
 async function processRecord(record: SQSRecord) {
   console.log("Processing record.", record);
 
-  const body = JSON.parse(record.body);
+  const body = JSON.parse(record.body) as SqsMessageBody;
 
   switch (body.action) {
     case "ClientJoin":
@@ -44,6 +53,7 @@ async function processRecord(record: SQSRecord) {
       await handleClientLeftAction(body);
       break;
     default:
+      exhaustiveMatchingGuard(body);
       break;
   }
 }
@@ -51,10 +61,7 @@ async function processRecord(record: SQSRecord) {
 async function handleClientJoinAction({
   roomId,
   clientId,
-}: {
-  roomId: string;
-  clientId: string;
-}) {
+}: SqsMessageClientJoin) {
   try {
     const seq = await applyClientJoinAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {
@@ -77,10 +84,7 @@ async function handleClientJoinAction({
 async function handleClientLeftAction({
   roomId,
   clientId,
-}: {
-  roomId: string;
-  clientId: string;
-}) {
+}: SqsMessageClientLeft) {
   try {
     const seq = await applyClientLeftAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {

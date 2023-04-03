@@ -1,5 +1,5 @@
 {
-  "name": "shared-utils",
+  "name": "shared-models",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",

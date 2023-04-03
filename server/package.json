@@ -6,7 +6,8 @@
     "@types/aws-lambda": "^8.10.114",
     "@types/node": "^18.15.11",
     "nanoid": "^4.0.2",
-    "shared-utils": "file:../shared_modules/shared-utils",
+    "shared-models": "file:../shared/shared-models",
+    "shared-utils": "file:../shared/shared-utils",
     "typescript": "^5.0.3"
   }
 }

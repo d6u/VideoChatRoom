@@ -20,24 +20,21 @@ type PeerConnectionManagerCommand =
     }
   | {
       type: "AddIceCandidate";
-      candidate: RTCIceCandidate;
+      candidate: RTCIceCandidateInit;
     };
 
 export default class PeerConnectionManager {
-  // public
-  localIceCandidatesSubject = new Subject<RTCIceCandidate>();
+  localIceCandidatesSubject = new Subject<RTCIceCandidateInit>();
   tracksSubject = new Subject<RTCTrackEvent>();
   descriptionsSubject = new Subject<RTCSessionDescriptionInit>();
 
-  // private
   subscription = new Subscription();
-  remoteIceCandidates: RTCIceCandidate[] = [];
+  remoteIceCandidates: RTCIceCandidateInit[] = [];
   commandsSubject = new Subject<PeerConnectionManagerCommand>();
+
   private logger: Logger;
   private pc: RTCPeerConnection | null = null;
   private isPolite: boolean;
-
-  // public
 
   constructor(isPolite: boolean) {
     this.logger = new Logger(`PeerConnectionManager`);
@@ -121,7 +118,7 @@ export default class PeerConnectionManager {
     });
   }
 
-  addIceCandidate(candidate: RTCIceCandidate) {
+  addIceCandidate(candidate: RTCIceCandidateInit) {
     this.addCommand({ type: "AddIceCandidate", candidate });
   }
 
@@ -130,14 +127,14 @@ export default class PeerConnectionManager {
     this.pc!.addTrack(track, stream);
   }
 
-  // private
-
-  addCommand(command: PeerConnectionManagerCommand) {
+  private addCommand(command: PeerConnectionManagerCommand) {
     this.logger.log(`*** adding command: ${command.type}`);
     this.commandsSubject.next(command);
   }
 
-  createCommandHandlerObservable = (command: PeerConnectionManagerCommand) => {
+  private createCommandHandlerObservable = (
+    command: PeerConnectionManagerCommand
+  ) => {
     return defer(async () => {
       console.group("executing command");
       this.logger.log(`>>> executing command: ${command.type}`, command);
@@ -197,7 +194,7 @@ export default class PeerConnectionManager {
     });
   };
 
-  async createOffer() {
+  private async createOffer() {
     try {
       this.logger.log(`creating offer`);
       const offer = await this.pc!.createOffer();
@@ -209,7 +206,7 @@ export default class PeerConnectionManager {
     }
   }
 
-  async createAnswer() {
+  private async createAnswer() {
     try {
       this.logger.log(`creating answer`);
       const answer = await this.pc!.createAnswer();
@@ -221,7 +218,7 @@ export default class PeerConnectionManager {
     }
   }
 
-  async setRemoteDescription(description: RTCSessionDescriptionInit) {
+  private async setRemoteDescription(description: RTCSessionDescriptionInit) {
     // if (description.type === "answer" && this.pc.signalingState === "stable") {
     //   this.logger.warn(
     //     `ignoring set remote description for answer, because signaling is in stable state`
@@ -244,7 +241,7 @@ export default class PeerConnectionManager {
     }
   }
 
-  async addIceCandidateInternal(iceCandidate: RTCIceCandidate) {
+  private async addIceCandidateInternal(iceCandidate: RTCIceCandidateInit) {
     if (
       this.pc!.signalingState !== "stable" &&
       this.pc!.signalingState !== "have-remote-offer"

@@ -1,12 +1,15 @@
 import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
+import { WebSocketMessage } from "shared-models";
+
+const encoder = new TextEncoder();
 
 export async function postToClient(
   apiGatewayManagementApi: ApiGatewayManagementApi,
   connectionId: string,
-  data: any
+  data: WebSocketMessage
 ) {
   await (apiGatewayManagementApi.postToConnection({
     ConnectionId: connectionId,
-    Data: JSON.stringify(data),
+    Data: encoder.encode(JSON.stringify(data)),
   }) as Promise<any>);
 }

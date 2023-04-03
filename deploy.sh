@@ -7,6 +7,17 @@ printf "\n>>> Cleaning up staging area for CloudFormation...\n"
 rm -rf build
 mkdir build
 
+# Enter /shared
+pushd shared/shared-utils
+npm i
+tsc
+popd
+
+pushd shared/shared-models
+npm i
+tsc
+popd
+
 # Enter /server
 pushd server
 
@@ -30,7 +41,6 @@ printf $SOURCE_ZIP
 
 printf "\n>>> Contents of final source zip:\n"
 zipinfo -1 $SOURCE_ZIP | sed 's/\([^/]*\/\).*$/\1/' | sort | uniq
-
 
 # Deploy server
 printf "\n>>> Uploading the source zip to S3...\n"
