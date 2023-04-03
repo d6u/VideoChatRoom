@@ -1,9 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SQSEvent, SQSRecord } from "aws-lambda";
 import {
+  ClientJoinSqsMessageBody,
+  ClientLeftSqsMessageBody,
   SqsMessageBody,
-  SqsMessageClientJoin,
-  SqsMessageClientLeft,
+  SqsMessageBodyAction,
 } from "shared-models";
 import {
   exhaustiveMatchingGuard,
@@ -49,22 +50,21 @@ async function processRecord(record: SQSRecord) {
   const body = JSON.parse(record.body) as SqsMessageBody;
 
   switch (body.action) {
-    case "ClientJoin":
+    case SqsMessageBodyAction.ClientJoin:
       await handleClientJoinAction(body);
       break;
-    case "ClientLeft":
+    case SqsMessageBodyAction.ClientLeft:
       await handleClientLeftAction(body);
       break;
     default:
       exhaustiveMatchingGuard(body);
-      break;
   }
 }
 
 async function handleClientJoinAction({
   roomId,
   clientId,
-}: SqsMessageClientJoin) {
+}: ClientJoinSqsMessageBody) {
   try {
     const seq = await applyClientJoinAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {
@@ -87,7 +87,7 @@ async function handleClientJoinAction({
 async function handleClientLeftAction({
   roomId,
   clientId,
-}: SqsMessageClientLeft) {
+}: ClientLeftSqsMessageBody) {
   try {
     const seq = await applyClientLeftAction(dynamoDbClient, roomId, clientId);
     if (seq != null) {

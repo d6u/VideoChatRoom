@@ -1,13 +1,20 @@
-export type SqsMessageClientJoin = {
-  action: "ClientJoin";
+export enum SqsMessageBodyAction {
+  ClientJoin = "ClientJoin",
+  ClientLeft = "ClientLeft",
+}
+
+export type ClientJoinSqsMessageBody = {
+  action: SqsMessageBodyAction.ClientJoin;
   roomId: string;
   clientId: string;
 };
 
-export type SqsMessageClientLeft = {
-  action: "ClientLeft";
+export type ClientLeftSqsMessageBody = {
+  action: SqsMessageBodyAction.ClientLeft;
   roomId: string;
   clientId: string;
 };
 
-export type SqsMessageBody = SqsMessageClientJoin | SqsMessageClientLeft;
+export type SqsMessageBody =
+  | ClientJoinSqsMessageBody
+  | ClientLeftSqsMessageBody;

@@ -4,6 +4,7 @@ import {
   APIGatewayProxyWebsocketHandlerV2,
 } from "aws-lambda";
 import {
+  SqsMessageBodyAction,
   WebSocketActionJoinRoom,
   WebSocketMessageCurrentClientId,
 } from "shared-models";
@@ -103,7 +104,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
 
   try {
     await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
-      action: "ClientJoin",
+      action: SqsMessageBodyAction.ClientJoin,
       roomId,
       clientId: connectionId,
     });
