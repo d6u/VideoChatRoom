@@ -8,12 +8,14 @@ rm -rf build
 mkdir build
 
 # Enter /shared
-pushd shared/shared-utils
+pushd shared/shared-models
+rm -rfv dist node_modules | sed 's/\([^/]*\)\/.*$/\1/' | sort | uniq
 npm i
 tsc
 popd
 
-pushd shared/shared-models
+pushd shared/shared-utils
+rm -rfv dist node_modules | sed 's/\([^/]*\)\/.*$/\1/' | sort | uniq
 npm i
 tsc
 popd
