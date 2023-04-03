@@ -15,6 +15,7 @@ import {
   LeaderSelectionDirectMessage,
   SignalingDirectMessage,
   WebSocketActionDirectMessage,
+  WebSocketActionType,
   isLeaderSelectionMessage,
   isSignalingDirectMessage,
 } from "shared-models";
@@ -28,7 +29,7 @@ type DirectMessageNoSeq =
   | Omit<DescriptionDirectMessage, "seq">
   | Omit<IceCandidateDirectMessage, "seq">;
 
-enum ClientPeerConnectionEventType {
+export enum ClientPeerConnectionEventType {
   SendMessageToRemote = "SendMessageToRemote",
   RemoteStream = "RemoteStream",
   RemoteTrack = "RemoteTrack",
@@ -149,7 +150,7 @@ export default class ClientPeerConnection {
     this.eventsSubject.next({
       type: ClientPeerConnectionEventType.SendMessageToRemote,
       message: {
-        action: "DirectMessage",
+        action: WebSocketActionType.DirectMessage,
         toClientId: this.clientId,
         message: message as DirectMessage,
       },

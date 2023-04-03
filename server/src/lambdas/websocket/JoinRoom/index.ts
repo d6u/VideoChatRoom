@@ -7,6 +7,7 @@ import {
   SqsMessageBodyAction,
   WebSocketActionJoinRoom,
   WebSocketMessageCurrentClientId,
+  WebSocketMessageType,
 } from "shared-models";
 import {
   getApiGatewayManagement,
@@ -48,7 +49,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
 
   const message: WebSocketMessageCurrentClientId = {
     isDelta: false,
-    type: "CurrentClientId",
+    type: WebSocketMessageType.CurrentClientId,
     clientId: connectionId,
   };
 

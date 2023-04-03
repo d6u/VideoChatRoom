@@ -2,7 +2,10 @@ import {
   APIGatewayProxyWebsocketEventV2,
   APIGatewayProxyWebsocketHandlerV2,
 } from "aws-lambda";
-import { WebSocketActionDirectMessage } from "shared-models";
+import {
+  WebSocketActionDirectMessage,
+  WebSocketMessageType,
+} from "shared-models";
 import { getApiGatewayManagement } from "shared-utils";
 import {
   errorIsGoneException,
@@ -33,7 +36,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   try {
     await postToClient(apiGatewayManagementApi, toClientId, {
       isDelta: false,
-      type: "DirectMessage",
+      type: WebSocketMessageType.DirectMessage,
       fromClientId,
       message,
     });

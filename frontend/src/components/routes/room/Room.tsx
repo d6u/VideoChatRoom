@@ -1,14 +1,7 @@
 import { Set } from "immutable";
 import { useEffect, useState } from "react";
-import {
-  BehaviorSubject,
-  Observable,
-  Subscription,
-  filter,
-  from,
-  timer,
-} from "rxjs";
-import { WebSocketMessageCurrentClientId } from "shared-models";
+import { BehaviorSubject, Subscription, filter, from, timer } from "rxjs";
+import { WebSocketActionType, isCurrentClientIdMessage } from "shared-models";
 
 import RoomStateSyncManager from "../../../apis/RoomStateSyncManager";
 import webSocketManager from "../../../apis/WebSocketManager";
@@ -63,7 +56,7 @@ export default function Room({ roomId }: { roomId: string }) {
     subscription.add(
       webSocketManager.openObserver.subscribe(() => {
         setWsStatus("Connected");
-        webSocketManager.send({ action: "JoinRoom", roomId });
+        webSocketManager.send({ action: WebSocketActionType.JoinRoom, roomId });
       })
     );
 
@@ -74,11 +67,9 @@ export default function Room({ roomId }: { roomId: string }) {
     );
 
     subscription.add(
-      (
-        webSocketManager.messagesSubject.pipe(
-          filter((m) => !m.isDelta && m.type === "CurrentClientId")
-        ) as Observable<WebSocketMessageCurrentClientId>
-      ).subscribe(({ clientId }) => setCurrentClientId(clientId))
+      webSocketManager.messagesSubject
+        .pipe(filter(isCurrentClientIdMessage))
+        .subscribe(({ clientId }) => setCurrentClientId(clientId))
     );
 
     subscription.add(

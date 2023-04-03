@@ -1,9 +1,13 @@
 import classNames from "classnames";
 import { useEffect, useRef, useState } from "react";
 import { Subject, Subscription, takeWhile } from "rxjs";
+import { DirectMessageType } from "shared-models";
 
-import ClientPeerConnection from "../../../apis/ClientPeerConnection";
+import ClientPeerConnection, {
+  ClientPeerConnectionEventType,
+} from "../../../apis/ClientPeerConnection";
 import webSocketManager from "../../../apis/WebSocketManager";
+import { exhaustiveMatchingGuard } from "../../../utils";
 
 export default function ClientBoxRemote({
   clientId,
@@ -31,20 +35,20 @@ export default function ClientBoxRemote({
     subscription.add(
       refClientPeerConnection.current!.eventsSubject.subscribe((event) => {
         switch (event.type) {
-          case "SendMessageToRemote":
+          case ClientPeerConnectionEventType.SendMessageToRemote:
             webSocketManager.send(event.message);
             break;
-          case "RemoteStream":
+          case ClientPeerConnectionEventType.RemoteStream:
             refVideo.current!.srcObject = event.stream;
             break;
-          case "RemoteTrack":
+          case ClientPeerConnectionEventType.RemoteTrack:
             if (refVideo.current!.srcObject == null) {
               refVideo.current!.srcObject = new MediaStream();
             }
             (refVideo.current!.srcObject as MediaStream).addTrack(event.track);
             break;
           default:
-            break;
+            exhaustiveMatchingGuard(event);
         }
       })
     );
@@ -56,7 +60,10 @@ export default function ClientBoxRemote({
 
     refClientPeerConnection.current!.startConnectionProcess({
       leaderSelectionMessagesObservable: leaderSelectionMessagesObservable.pipe(
-        takeWhile((message) => message.type !== "ConfirmingLeader", true)
+        takeWhile(
+          (message) => message.type !== DirectMessageType.ConfirmingLeader,
+          true
+        )
       ),
       signalingRemoteMessageObservable,
       localMediaStreamObservable: localMediaStreamSubject,

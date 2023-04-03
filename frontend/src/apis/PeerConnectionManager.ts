@@ -1,5 +1,6 @@
 import { Subject, Subscription, concatMap, defer, fromEvent } from "rxjs";
 
+import { exhaustiveMatchingGuard } from "../utils";
 import Logger from "../utils/Logger";
 
 const WEBRTC_CONFIG = {
@@ -10,16 +11,22 @@ const WEBRTC_CONFIG = {
   ],
 };
 
+enum PeerConnectionManagerCommandType {
+  HandleRemoteDescription = "HandleRemoteDescription",
+  CreateOffer = "CreateOffer",
+  AddIceCandidate = "AddIceCandidate",
+}
+
 type PeerConnectionManagerCommand =
   | {
-      type: "HandleRemoteDescription";
+      type: PeerConnectionManagerCommandType.HandleRemoteDescription;
       description: RTCSessionDescriptionInit;
     }
   | {
-      type: "CreateOffer";
+      type: PeerConnectionManagerCommandType.CreateOffer;
     }
   | {
-      type: "AddIceCandidate";
+      type: PeerConnectionManagerCommandType.AddIceCandidate;
       candidate: RTCIceCandidateInit;
     };
 
@@ -75,7 +82,7 @@ export default class PeerConnectionManager {
           `negotiation needed`,
           `signaling state = ${this.pc!.signalingState}`
         );
-        this.addCommand({ type: "CreateOffer" });
+        this.addCommand({ type: PeerConnectionManagerCommandType.CreateOffer });
       })
     );
 
@@ -113,13 +120,16 @@ export default class PeerConnectionManager {
 
   handleRemoteDescription(description: RTCSessionDescriptionInit) {
     this.addCommand({
-      type: "HandleRemoteDescription",
+      type: PeerConnectionManagerCommandType.HandleRemoteDescription,
       description,
     });
   }
 
   addIceCandidate(candidate: RTCIceCandidateInit) {
-    this.addCommand({ type: "AddIceCandidate", candidate });
+    this.addCommand({
+      type: PeerConnectionManagerCommandType.AddIceCandidate,
+      candidate,
+    });
   }
 
   addTrack(track: MediaStreamTrack, stream: MediaStream) {
@@ -140,7 +150,7 @@ export default class PeerConnectionManager {
       this.logger.log(`>>> executing command: ${command.type}`, command);
 
       switch (command.type) {
-        case "HandleRemoteDescription": {
+        case PeerConnectionManagerCommandType.HandleRemoteDescription: {
           const { description } = command;
 
           this.logger.log(
@@ -177,16 +187,16 @@ export default class PeerConnectionManager {
           }
           break;
         }
-        case "CreateOffer": {
+        case PeerConnectionManagerCommandType.CreateOffer: {
           const offer = await this.createOffer();
           this.descriptionsSubject.next(offer!);
           break;
         }
-        case "AddIceCandidate":
+        case PeerConnectionManagerCommandType.AddIceCandidate:
           await this.addIceCandidateInternal(command.candidate);
           break;
         default:
-          break;
+          exhaustiveMatchingGuard(command);
       }
 
       this.logger.log(`<<< finish executing command: ${command.type}`, command);
@@ -219,6 +229,8 @@ export default class PeerConnectionManager {
   }
 
   private async setRemoteDescription(description: RTCSessionDescriptionInit) {
+    // TODO: confirm if this is needed
+
     // if (description.type === "answer" && this.pc.signalingState === "stable") {
     //   this.logger.warn(
     //     `ignoring set remote description for answer, because signaling is in stable state`
