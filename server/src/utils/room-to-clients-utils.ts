@@ -4,7 +4,7 @@ import {
   UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
 
-import { getDynamoDbClient } from "./dynamo-db-utils";
+import { getDynamoDbClient } from "./dynamo-db-utils.js";
 
 const TABLE_NAME = process.env.TABLE_NAME_ROOM_TO_CLIENTS;
 

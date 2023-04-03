@@ -1,11 +1,9 @@
 import { Record, Set } from "immutable";
 
-export type RawSnapshot = {
+export default class SnapshotRecord extends Record<{
   seq: number;
-  clientIds: string[];
-};
-
-export default class Snapshot extends Record({
+  clientIds: Set<string>;
+}>({
   seq: -1,
   clientIds: Set<string>(),
 }) {}

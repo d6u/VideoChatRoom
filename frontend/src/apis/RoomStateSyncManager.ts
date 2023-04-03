@@ -15,29 +15,36 @@ import {
   tap,
   zipWith,
 } from "rxjs";
+import {
+  Delta,
+  DeltaType,
+  WebSocketMessage,
+  isDeltaMessage,
+} from "shared-models";
 
-import Delta from "../models/Delta";
-import Snapshot from "../models/Snapshot";
+import {
+  ClientJoinDeltaRecord,
+  ClientLeftDeltaRecord,
+  DeltaRecord,
+} from "../models/Delta";
+import SnapshotRecord from "../models/Snapshot";
+import { exhaustiveMatchingGuard } from "../utils";
 import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
-import { getRoomDeltas, getRoomSnapshot } from "./Api";
+import { getRoomDeltas, getRoomSnapshot, isSnapshotOkResponse } from "./Api";
 
 export default class RoomStateSyncManager {
-  public roomStatesObservable: Observable<Snapshot> | null = null;
+  roomStatesObservable: Observable<SnapshotRecord> | null = null;
 
-  // private
-  subscription = new Subscription(() => {
+  private subscription = new Subscription(() => {
     this.logger.debug("subscription disposed");
   });
-  rawDeltasSubject = new Subject<any>();
-  isFetchingGapDeltas = false;
-
+  private rawDeltasSubject = new Subject<Delta>();
+  private isFetchingGapDeltas = false;
   private logger: Logger;
   private roomId: string;
 
-  // public methods
-
-  constructor(roomId: string, wsObservable: Observable<any>) {
+  constructor(roomId: string, wsObservable: Observable<WebSocketMessage>) {
     this.logger = new Logger("RoomStateSyncManager");
     this.logger.log("constructor()");
 
@@ -69,10 +76,19 @@ export default class RoomStateSyncManager {
      * a much simpler and easy to understand implementation.
      */
 
-    const snapshotsSubject = new ReplaySubject<Snapshot>(1);
+    const snapshotsSubject = new ReplaySubject<SnapshotRecord>(1);
 
     const deltasObservable = this.rawDeltasSubject.pipe(
-      map((data) => new Delta(data)),
+      map((delta) => {
+        switch (delta.type) {
+          case DeltaType.ClientJoin:
+            return new ClientJoinDeltaRecord(delta);
+          case DeltaType.ClientLeft:
+            return new ClientLeftDeltaRecord(delta);
+          default:
+            exhaustiveMatchingGuard(delta);
+        }
+      }),
       tap((delta) => {
         this.logger.debug("new delta", delta.toJS());
       }),
@@ -83,9 +99,13 @@ export default class RoomStateSyncManager {
     this.subscription.add(
       defer(() => getRoomSnapshot(this.roomId))
         .pipe(
+          filter(isSnapshotOkResponse),
           map(
-            (data) =>
-              new Snapshot({ seq: data.seq, clientIds: Set(data.clientIds) })
+            ({ snapshot }) =>
+              new SnapshotRecord({
+                seq: snapshot.seq,
+                clientIds: Set(snapshot.clientIds),
+              })
           ),
           tap((snapshot) => {
             this.logger.debug("new snapshot", snapshot.toJS());
@@ -102,7 +122,8 @@ export default class RoomStateSyncManager {
     this.subscription.add(
       wsObservable
         .pipe(
-          filter((message) => message.isDelta),
+          filter(isDeltaMessage),
+          map((data) => data.delta),
           tap((delta) => {
             this.logger.debug("new detla from ws", delta);
           })
@@ -132,7 +153,7 @@ export default class RoomStateSyncManager {
             this.logger.debug(
               `[2] snapshot = ${snapshotStr}\ndelta = ${deltaStr}`
             );
-            if (delta.seq - snapshot.seq !== 1) {
+            if (delta.seq! - snapshot.seq !== 1) {
               throw new Error("delta.seq and snapshot.seq does not match.");
             }
           }),
@@ -162,27 +183,25 @@ export default class RoomStateSyncManager {
     this.subscription.unsubscribe();
   }
 
-  // private methods
-
-  reducer(snapshot: Snapshot, delta: Delta) {
-    switch (delta.type) {
-      case "ClientJoin": {
+  private reducer(snapshot: SnapshotRecord, delta: DeltaRecord) {
+    switch (delta.type!) {
+      case DeltaType.ClientJoin: {
         return snapshot
           .update("seq", (seq) => seq + 1)
           .update("clientIds", (clientIds) => clientIds.add(delta.clientId));
       }
-      case "ClientLeft": {
+      case DeltaType.ClientLeft: {
         return snapshot
           .update("seq", (seq) => seq + 1)
           .update("clientIds", (clientIds) => clientIds.delete(delta.clientId));
       }
       default: {
-        return snapshot;
+        exhaustiveMatchingGuard(delta.type);
       }
     }
   }
 
-  fetchGapDeltas(roomId: string, fromSeq: number, toSeq: number) {
+  private fetchGapDeltas(roomId: string, fromSeq: number, toSeq: number) {
     if (this.isFetchingGapDeltas) {
       return;
     }

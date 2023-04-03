@@ -9,18 +9,16 @@ export enum DeltaType {
   ClientLeft = "ClientLeft",
 }
 
-export interface Delta {
-  roomId: string;
+export type ClientJoinDelta = {
   seq: number;
-  type: DeltaType;
-}
-
-export interface ClientJoinDelta extends Delta {
   type: DeltaType.ClientJoin;
   clientId: string;
-}
+};
 
-export interface ClientLeftDelta extends Delta {
+export type ClientLeftDelta = {
+  seq: number;
   type: DeltaType.ClientLeft;
   clientId: string;
-}
+};
+
+export type Delta = ClientJoinDelta | ClientLeftDelta;

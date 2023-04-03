@@ -1,8 +1,8 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { nanoid } from "nanoid";
 
-import { createRoomSnapshot } from "../../../utils/room-snapshots-utils";
-import { createRoomToClientsPlaceholder } from "../../../utils/room-to-clients-utils";
+import { createRoomSnapshot } from "../../../utils/room-snapshots-utils.js";
+import { createRoomToClientsPlaceholder } from "../../../utils/room-to-clients-utils.js";
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const roomId = nanoid();

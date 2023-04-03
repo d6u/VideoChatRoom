@@ -3,8 +3,8 @@ import { WebSocketMessage } from "shared-models";
 import {
   errorIsGoneException,
   postToClient,
-} from "./api-gateway-management-utils";
-import { getRoomToClientsMap } from "./room-to-clients-utils";
+} from "./api-gateway-management-utils.js";
+import { getRoomToClientsMap } from "./room-to-clients-utils.js";
 
 export async function postDataToRoom(roomId: string, data: WebSocketMessage) {
   const clientIds = await getClientIdsForBroadcasting(roomId);

@@ -13,10 +13,10 @@ import {
 import {
   errorIsGoneException,
   postToClient,
-} from "../../../utils/api-gateway-management-utils";
-import { createClientToRoomPair } from "../../../utils/client-to-room-utils";
-import { addClientToRoom } from "../../../utils/room-to-clients-utils";
-import { sendActionToRoomActionsQueue } from "../../../utils/sqs-utils";
+} from "../../../utils/api-gateway-management-utils.js";
+import { createClientToRoomPair } from "../../../utils/client-to-room-utils.js";
+import { addClientToRoom } from "../../../utils/room-to-clients-utils.js";
+import { sendActionToRoomActionsQueue } from "../../../utils/sqs-utils.js";
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const action = JSON.parse(event.body!) as WebSocketActionJoinRoom;
@@ -38,7 +38,6 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   // Return current connection ID as client ID to the current WebSocket client.
 
   const message: WebSocketMessageCurrentClientId = {
-    isDelta: false,
     type: WebSocketMessageType.CurrentClientId,
     clientId: connectionId,
   };

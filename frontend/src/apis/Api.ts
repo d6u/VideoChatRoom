@@ -1,17 +1,42 @@
-import endpoints from "../api_endpoints.json";
-import { RawDelta } from "../models/Delta";
-import { RawSnapshot } from "../models/Snapshot";
+import { Delta, Snapshot } from "shared-models";
 
-export async function createRoom(): Promise<{ roomId: string }> {
+import endpoints from "../api_endpoints.json";
+
+export async function createRoom(): Promise<
+  | {
+      hasError: true;
+      roomData: null;
+    }
+  | {
+      hasError: false;
+      roomData: { roomId: string };
+    }
+> {
   const response = await fetch(`${endpoints.HttpEndpointUrl}/rooms`, {
     method: "POST",
     mode: "cors",
   });
 
-  return await response.json();
+  if (response.ok) {
+    return { hasError: false, roomData: await response.json() };
+  } else {
+    return { hasError: true, roomData: null };
+  }
 }
 
-export async function getRoomSnapshot(roomId: string): Promise<RawSnapshot> {
+type GetRoomSnapsotResponse =
+  | {
+      hasError: true;
+      snapshot: null;
+    }
+  | {
+      hasError: false;
+      snapshot: Snapshot;
+    };
+
+export async function getRoomSnapshot(
+  roomId: string
+): Promise<GetRoomSnapsotResponse> {
   const response = await fetch(
     `${endpoints.HttpEndpointUrl}/rooms/${roomId}/snapshot`,
     {
@@ -20,14 +45,24 @@ export async function getRoomSnapshot(roomId: string): Promise<RawSnapshot> {
     }
   );
 
-  return await response.json();
+  if (response.ok) {
+    return { hasError: false, snapshot: await response.json() };
+  } else {
+    return { hasError: true, snapshot: null };
+  }
+}
+
+export function isSnapshotOkResponse(
+  response: GetRoomSnapsotResponse
+): response is { hasError: false; snapshot: Snapshot } {
+  return !response.hasError;
 }
 
 export async function getRoomDeltas(
   roomId: string,
   fromSeq: number,
   toSeq: number
-): Promise<RawDelta[]> {
+): Promise<Delta[]> {
   const response = await fetch(
     `${endpoints.HttpEndpointUrl}/rooms/${roomId}/deltas?fromSeq=${fromSeq}&toSeq=${toSeq}`,
     {

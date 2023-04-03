@@ -1,7 +1,7 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { Delta, DeltaType } from "shared-models";
 
-import { getRoomDeltas } from "../../../utils/room-snapshots-utils";
+import { getRoomDeltas } from "../../../utils/room-snapshots-utils.js";
 
 function parseEvent(event: APIGatewayProxyEventV2) {
   const roomId = event.pathParameters!.roomId as string;
@@ -46,10 +46,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   const deltas: Delta[] = response.Items.map((item) => ({
-    roomId: item.RoomId.S!,
-    seq: parseInt(item.Seq.N!),
-    type: item.Type.S as DeltaType,
-    clientId: item.ClientId.S!,
+    seq: parseInt(item.Seq!.N!),
+    type: item.Type!.S as DeltaType,
+    clientId: item.ClientId!.S!,
   }));
 
   return {

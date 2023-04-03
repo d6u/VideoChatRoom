@@ -1,7 +1,7 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { Snapshot } from "shared-models";
 
-import { getRoomSnapshot } from "../../../utils/room-snapshots-utils";
+import { getRoomSnapshot } from "../../../utils/room-snapshots-utils.js";
 
 function parseEvent(event: APIGatewayProxyEventV2) {
   return { roomId: event.pathParameters!.roomId as string };
@@ -26,9 +26,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   const snapshot: Snapshot = {
-    roomId: response.Item.RoomId.S!,
-    seq: parseInt(response.Item.Seq.N!),
-    clientIds: response.Item.ClientIds.SS ?? [],
+    roomId: response.Item.RoomId!.S!,
+    seq: parseInt(response.Item.Seq!.N!),
+    clientIds: response.Item.ClientIds?.SS ?? [],
   };
 
   return {

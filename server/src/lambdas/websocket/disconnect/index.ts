@@ -7,9 +7,9 @@ import { SqsMessageBodyAction } from "shared-models";
 import {
   deleteClientToRoomPair,
   getClientToRoomPair,
-} from "../../../utils/client-to-room-utils";
-import { removeClientFromRoom } from "../../../utils/room-to-clients-utils";
-import { sendActionToRoomActionsQueue } from "../../../utils/sqs-utils";
+} from "../../../utils/client-to-room-utils.js";
+import { removeClientFromRoom } from "../../../utils/room-to-clients-utils.js";
+import { sendActionToRoomActionsQueue } from "../../../utils/sqs-utils.js";
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   return {

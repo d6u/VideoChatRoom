@@ -2,6 +2,7 @@ import { SQSEvent, SQSRecord } from "aws-lambda";
 import {
   ClientJoinSqsMessageBody,
   ClientLeftSqsMessageBody,
+  DeltaType,
   SqsMessageBody,
   SqsMessageBodyAction,
   WebSocketMessageType,
@@ -11,8 +12,8 @@ import { exhaustiveMatchingGuard } from "shared-utils";
 import {
   applyClientJoinAction,
   applyClientLeftAction,
-} from "../../../utils/room-snapshots-utils";
-import { postDataToRoom } from "../../../utils/room-utils";
+} from "../../../utils/room-snapshots-utils.js";
+import { postDataToRoom } from "../../../utils/room-utils.js";
 
 export async function handler(event: SQSEvent) {
   console.log("Handling event.", event);
@@ -57,10 +58,12 @@ async function handleClientJoinAction({
     const seq = await applyClientJoinAction(roomId, clientId);
     if (seq != null) {
       await postDataToRoom(roomId, {
-        isDelta: true,
-        type: WebSocketMessageType.ClientJoin,
-        seq,
-        clientId,
+        type: WebSocketMessageType.Delta,
+        delta: {
+          type: DeltaType.ClientJoin,
+          seq,
+          clientId,
+        },
       });
     }
   } catch (error) {
@@ -76,10 +79,12 @@ async function handleClientLeftAction({
     const seq = await applyClientLeftAction(roomId, clientId);
     if (seq != null) {
       await postDataToRoom(roomId, {
-        isDelta: true,
-        type: WebSocketMessageType.ClientLeft,
-        seq,
-        clientId,
+        type: WebSocketMessageType.Delta,
+        delta: {
+          type: DeltaType.ClientLeft,
+          seq,
+          clientId,
+        },
       });
     }
   } catch (error) {

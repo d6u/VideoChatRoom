@@ -5,18 +5,22 @@ set -e
 
 # Enter /shared/shared-models
 pushd shared/shared-models
+
 printf "\n>>> Update dependencies for shared-models...\n"
 rm -rfv dist node_modules | sed 's/\([^/]*\)\/.*$/\1/' | sort | uniq
 npm i
 tsc
+
 popd
 
 # Enter /shared/shared-utils
 pushd shared/shared-utils
+
 printf "\n>>> Update dependencies for shared-utils...\n"
 rm -rfv dist node_modules | sed 's/\([^/]*\)\/.*$/\1/' | sort | uniq
 npm i
 tsc
+
 popd
 
 # Enter /server
@@ -35,7 +39,7 @@ popd
 pushd frontend
 
 printf "\n>>> Update dependencies for front-end...\n"
-rm -rfv node_modules/shared-models | sed 's/\([^/]*\)\/.*$/\1/' | sort | uniq
+rm -rfv build node_modules | sed 's/\([^/]*\)\/.*$/\1/' | sort | uniq
 
 printf "\n>>> Building...\n"
 npm i

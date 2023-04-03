@@ -1,4 +1,5 @@
 import { DirectMessage } from "./directMessage.js";
+import { Delta } from "./entities.js";
 
 // --- Action type ---
 
@@ -27,46 +28,29 @@ export type WebSocketAction =
 export enum WebSocketMessageType {
   CurrentClientId = "CurrentClientId",
   DirectMessage = "DirectMessage",
-  ClientJoin = "ClientJoin",
-  ClientLeft = "ClientLeft",
+  Delta = "Delta",
 }
 
 export type WebSocketMessageCurrentClientId = {
-  isDelta: false;
   type: WebSocketMessageType.CurrentClientId;
   clientId: string;
 };
 
 export type WebSocketMessageDirectMessage = {
-  isDelta: false;
   type: WebSocketMessageType.DirectMessage;
   fromClientId: string;
   message: DirectMessage;
 };
 
-export type WebSocketNonDeltaMessage =
+export type WebSocketDeltaMessage = {
+  type: WebSocketMessageType.Delta;
+  delta: Delta;
+};
+
+export type WebSocketMessage =
   | WebSocketMessageCurrentClientId
-  | WebSocketMessageDirectMessage;
-
-export type WebSocketMessageClientJoin = {
-  isDelta: true;
-  type: WebSocketMessageType.ClientJoin;
-  seq: number;
-  clientId: string;
-};
-
-export type WebSocketMessageClientLeft = {
-  isDelta: true;
-  type: WebSocketMessageType.ClientLeft;
-  seq: number;
-  clientId: string;
-};
-
-export type WebSocketDeltaMessage =
-  | WebSocketMessageClientJoin
-  | WebSocketMessageClientLeft;
-
-export type WebSocketMessage = WebSocketNonDeltaMessage | WebSocketDeltaMessage;
+  | WebSocketMessageDirectMessage
+  | WebSocketDeltaMessage;
 
 export function isCurrentClientIdMessage(
   message: WebSocketMessage
@@ -79,9 +63,14 @@ export function filterForWebSocketMessageDirectMessage(fromClientId: string) {
     message: WebSocketMessage
   ): message is WebSocketMessageDirectMessage {
     return (
-      !message.isDelta &&
       message.type === WebSocketMessageType.DirectMessage &&
       message.fromClientId === fromClientId
     );
   };
+}
+
+export function isDeltaMessage(
+  message: WebSocketMessage
+): message is WebSocketDeltaMessage {
+  return message.type === WebSocketMessageType.Delta;
 }

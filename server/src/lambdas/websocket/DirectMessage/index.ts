@@ -10,7 +10,7 @@ import {
 import {
   errorIsGoneException,
   postToClient,
-} from "../../../utils/api-gateway-management-utils";
+} from "../../../utils/api-gateway-management-utils.js";
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const message = JSON.parse(event.body!) as WebSocketActionDirectMessage;
@@ -31,7 +31,6 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
 
   try {
     await postToClient(toClientId, {
-      isDelta: false,
       type: WebSocketMessageType.DirectMessage,
       fromClientId,
       message,
