@@ -9,12 +9,7 @@ import {
   getClientToRoomPair,
 } from "../../../utils/client-to-room-utils";
 import { removeClientFromRoom } from "../../../utils/room-to-clients-utils";
-import {
-  getSqsClient,
-  sendActionToRoomActionsQueue,
-} from "../../../utils/sqs-utils";
-
-const sqsClient = getSqsClient(process.env.AWS_REGION!);
+import { sendActionToRoomActionsQueue } from "../../../utils/sqs-utils";
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   return {
@@ -55,7 +50,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
     }
 
     try {
-      await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
+      await sendActionToRoomActionsQueue(roomId, requestId, {
         action: SqsMessageBodyAction.ClientLeft,
         roomId,
         clientId: connectionId,

@@ -12,17 +12,11 @@ import {
 
 import {
   errorIsGoneException,
-  getApiGatewayManagement,
   postToClient,
 } from "../../../utils/api-gateway-management-utils";
 import { createClientToRoomPair } from "../../../utils/client-to-room-utils";
 import { addClientToRoom } from "../../../utils/room-to-clients-utils";
-import {
-  getSqsClient,
-  sendActionToRoomActionsQueue,
-} from "../../../utils/sqs-utils";
-
-const sqsClient = getSqsClient(process.env.AWS_REGION!);
+import { sendActionToRoomActionsQueue } from "../../../utils/sqs-utils";
 
 function parseEvent(event: APIGatewayProxyWebsocketEventV2) {
   const action = JSON.parse(event.body!) as WebSocketActionJoinRoom;
@@ -96,7 +90,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   // === Send message to queue ===
 
   try {
-    await sendActionToRoomActionsQueue(sqsClient, roomId, requestId, {
+    await sendActionToRoomActionsQueue(roomId, requestId, {
       action: SqsMessageBodyAction.ClientJoin,
       roomId,
       clientId: connectionId,
