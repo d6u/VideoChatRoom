@@ -1,39 +1,4 @@
-// --- Direct Message ---
-
-export type LeaderSelectionDirectMessage = {
-  type: "SelectingLeader" | "ConfirmingLeader";
-  randomValue: number;
-};
-
-export type SignalingDirectMessage =
-  | {
-      type: "Description";
-      seq: number;
-      description: RTCSessionDescriptionInit;
-    }
-  | {
-      type: "IceCandidate";
-      seq: number;
-      candidate: RTCIceCandidateInit;
-    };
-
-export type DirectMessage =
-  | LeaderSelectionDirectMessage
-  | SignalingDirectMessage;
-
-export function isLeaderSelectionMessage(
-  message: DirectMessage
-): message is LeaderSelectionDirectMessage {
-  return (
-    message.type === "SelectingLeader" || message.type === "ConfirmingLeader"
-  );
-}
-
-export function isSignalingDirectMessage(
-  message: DirectMessage
-): message is SignalingDirectMessage {
-  return !isLeaderSelectionMessage(message);
-}
+import { DirectMessage } from "./directMessage.js";
 
 // --- Action type ---
 

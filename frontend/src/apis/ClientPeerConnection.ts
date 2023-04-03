@@ -8,67 +8,58 @@ import {
   timer,
 } from "rxjs";
 import {
+  DescriptionDirectMessage,
   DirectMessage,
+  DirectMessageType,
+  IceCandidateDirectMessage,
   LeaderSelectionDirectMessage,
   SignalingDirectMessage,
   WebSocketActionDirectMessage,
+  isLeaderSelectionMessage,
+  isSignalingDirectMessage,
 } from "shared-models";
 
 import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
 import PeerConnectionManager from "./PeerConnectionManager";
 
-type RawDirectMessage =
+type DirectMessageNoSeq =
   | LeaderSelectionDirectMessage
-  | Partial<SignalingDirectMessage>;
+  | Omit<DescriptionDirectMessage, "seq">
+  | Omit<IceCandidateDirectMessage, "seq">;
 
-type ClientPeerConnectionEvents =
+enum ClientPeerConnectionEventType {
+  SendMessageToRemote = "SendMessageToRemote",
+  RemoteStream = "RemoteStream",
+  RemoteTrack = "RemoteTrack",
+}
+
+type ClientPeerConnectionEvent =
   | {
-      type: "SendMessageToRemote";
+      type: ClientPeerConnectionEventType.SendMessageToRemote;
       message: WebSocketActionDirectMessage;
     }
   | {
-      type: "RemoteStream";
+      type: ClientPeerConnectionEventType.RemoteStream;
       stream: MediaStream;
     }
   | {
-      type: "RemoteTrack";
+      type: ClientPeerConnectionEventType.RemoteTrack;
       track: MediaStreamTrack;
     };
 
-function isRawSignalingDirectMessage(
-  message: RawDirectMessage
-): message is Partial<SignalingDirectMessage> {
-  return (
-    message.type !== "SelectingLeader" && message.type !== "ConfirmingLeader"
-  );
-}
-
-function isSignalingDirectMessage(
-  message: DirectMessage
-): message is SignalingDirectMessage {
-  return (
-    message.type !== "SelectingLeader" && message.type !== "ConfirmingLeader"
-  );
-}
-
-function createRandomValue() {
-  return Math.floor(Math.random() * (Math.pow(2, 31) - 1));
-}
-
 export default class ClientPeerConnection {
-  eventsSubject = new Subject<ClientPeerConnectionEvents>();
+  eventsSubject = new Subject<ClientPeerConnectionEvent>();
 
   private subscription = new Subscription();
   private hasReceivedFirstLeaderSelectionMessage = false;
   private seq = 0;
   private clientId: string;
   private logger: Logger;
-  private localMediaStreamObservable: Observable<MediaStream | null> | null =
-    null;
-  private leaderSelectionValue: number | null = null;
-  private sendSelectingLeaderMessageSubscription: Subscription | null = null;
-  private pcm: PeerConnectionManager | null = null;
+  private localMediaStreamObservable?: Observable<MediaStream | null>;
+  private leaderSelectionValue?: number;
+  private sendSelectingLeaderMessageSubscription?: Subscription;
+  private pcm?: PeerConnectionManager;
 
   constructor(clientId: string) {
     this.clientId = clientId;
@@ -85,18 +76,18 @@ export default class ClientPeerConnection {
     signalingRemoteMessageObservable: Observable<SignalingDirectMessage>;
     localMediaStreamObservable: Observable<MediaStream | null>;
   }) {
-    this.logger.log(`initializeConnection()`);
+    this.logger.log(`startConnectionProcess()`);
 
     this.localMediaStreamObservable = localMediaStreamObservable;
 
     // TODO: Although the chance is very low, avoid collisions.
     this.leaderSelectionValue = createRandomValue();
 
-    // Add a small delay so that React dev mode won't throw this off in
-    // useEffect.
+    // Add a small delay so that useEffect in React dev mode won't
+    // throw this off.
     this.sendSelectingLeaderMessageSubscription = timer(200).subscribe(() => {
       this.send({
-        type: "SelectingLeader",
+        type: DirectMessageType.SelectingLeader,
         randomValue: this.leaderSelectionValue!,
       });
     });
@@ -126,14 +117,8 @@ export default class ClientPeerConnection {
       concat(leaderSelectionMessagesObservable, signalingRemoteMessageSuject)
         .pipe(
           tap((message) => {
-            if (isSignalingDirectMessage(message)) {
-              this.logger.log(
-                `[${message.seq ?? "X"}] <== [${message.type}]:`,
-                message
-              );
-            } else {
-              this.logger.log(`[X] <== [${message.type}]:`, message);
-            }
+            const seq = isSignalingDirectMessage(message) ? message.seq : "X";
+            this.logger.log(`[${seq}] <== [${message.type}]:`, message);
           })
         )
         .subscribe(this.handler)
@@ -147,21 +132,22 @@ export default class ClientPeerConnection {
     this.pcm?.destroy();
   }
 
-  private send(rawMessage: RawDirectMessage) {
-    const message = {
+  private send(rawMessage: DirectMessageNoSeq) {
+    const message: DirectMessageNoSeq & { seq?: number } = {
       ...rawMessage,
     };
 
-    if (isRawSignalingDirectMessage(message)) {
+    if (
+      message.type !== DirectMessageType.SelectingLeader &&
+      message.type !== DirectMessageType.ConfirmingLeader
+    ) {
       message.seq = this.seq++;
-
-      this.logger.log(`==> [${message.seq}] [${message.type}]:`, message);
-    } else {
-      this.logger.log(`==> [X] [${message.type}]:`, message);
     }
 
+    this.logger.log(`==> [${message.seq ?? "X"}] [${message.type}]:`, message);
+
     this.eventsSubject.next({
-      type: "SendMessageToRemote",
+      type: ClientPeerConnectionEventType.SendMessageToRemote,
       message: {
         action: "DirectMessage",
         toClientId: this.clientId,
@@ -171,24 +157,21 @@ export default class ClientPeerConnection {
   }
 
   private handler = (message: DirectMessage) => {
-    if (
-      message.type === "SelectingLeader" ||
-      message.type === "ConfirmingLeader"
-    ) {
+    if (isLeaderSelectionMessage(message)) {
       this.handleSelectingLeaderAndConfirmingLeader({
         randomValue: message.randomValue,
       });
     }
 
-    if (message.type === "ConfirmingLeader") {
+    if (message.type === DirectMessageType.ConfirmingLeader) {
       this.handleConfirmingLeader();
     }
 
-    if (message.type === "Description") {
+    if (message.type === DirectMessageType.Description) {
       this.pcm!.handleRemoteDescription(message.description);
     }
 
-    if (message.type === "IceCandidate") {
+    if (message.type === DirectMessageType.IceCandidate) {
       this.pcm!.addIceCandidate(message.candidate);
     }
   };
@@ -220,12 +203,12 @@ export default class ClientPeerConnection {
 
         if (event.streams != null && event.streams[0] != null) {
           this.eventsSubject.next({
-            type: "RemoteStream",
+            type: ClientPeerConnectionEventType.RemoteStream,
             stream: event.streams[0],
           });
         } else {
           this.eventsSubject.next({
-            type: "RemoteTrack",
+            type: ClientPeerConnectionEventType.RemoteTrack,
             track: event.track,
           });
         }
@@ -235,7 +218,7 @@ export default class ClientPeerConnection {
     this.subscription.add(
       this.pcm.descriptionsSubject.subscribe((description) => {
         this.send({
-          type: "Description",
+          type: DirectMessageType.Description,
           description,
         });
       })
@@ -243,7 +226,7 @@ export default class ClientPeerConnection {
 
     this.subscription.add(
       this.pcm.localIceCandidatesSubject.subscribe((candidate) => {
-        this.send({ type: "IceCandidate", candidate });
+        this.send({ type: DirectMessageType.IceCandidate, candidate });
       })
     );
 
@@ -254,7 +237,7 @@ export default class ClientPeerConnection {
     this.sendSelectingLeaderMessageSubscription?.unsubscribe();
 
     this.send({
-      type: "ConfirmingLeader",
+      type: DirectMessageType.ConfirmingLeader,
       randomValue: this.leaderSelectionValue!,
     });
   }
@@ -275,4 +258,8 @@ export default class ClientPeerConnection {
       })
     );
   }
+}
+
+function createRandomValue() {
+  return Math.floor(Math.random() * (Math.pow(2, 31) - 1));
 }
