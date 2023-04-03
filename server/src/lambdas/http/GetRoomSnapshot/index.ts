@@ -1,4 +1,5 @@
-import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2 } from "aws-lambda";
+import { Snapshot } from "shared-models";
 
 import { getRoomSnapshot } from "../../../utils/room-snapshots-utils";
 
@@ -6,9 +7,7 @@ function parseEvent(event: APIGatewayProxyEventV2) {
   return { roomId: event.pathParameters!.roomId as string };
 }
 
-export async function handler(
-  event: APIGatewayProxyEventV2
-): Promise<APIGatewayProxyResultV2> {
+export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   console.log(event);
   const { roomId } = parseEvent(event);
 
@@ -17,30 +16,26 @@ export async function handler(
     response = await getRoomSnapshot(roomId);
   } catch (error) {
     console.error(error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error }),
-    };
+    return { statusCode: 500 };
   }
 
   console.log(response);
 
-  if (response == null || response.Item == null) {
-    return {
-      statusCode: 404,
-    };
+  if (response.Item == null) {
+    return { statusCode: 404 };
   }
+
+  const snapshot: Snapshot = {
+    roomId: response.Item.RoomId.S!,
+    seq: parseInt(response.Item.Seq.N!),
+    clientIds: response.Item.ClientIds.SS ?? [],
+  };
 
   return {
     statusCode: 200,
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      roomId: response.Item.RoomId.S,
-      seq: parseInt(response.Item.Seq.N!),
-      clientIds:
-        response.Item.ClientIds != null ? response.Item.ClientIds.SS : [],
-    }),
+    body: JSON.stringify(snapshot),
   };
-}
+};
