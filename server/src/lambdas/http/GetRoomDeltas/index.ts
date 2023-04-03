@@ -1,4 +1,5 @@
-import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2 } from "aws-lambda";
+import { Delta, DeltaType } from "shared-models";
 
 import { getRoomDeltas } from "../../../utils/room-snapshots-utils";
 
@@ -15,9 +16,7 @@ function parseEvent(event: APIGatewayProxyEventV2) {
   return { roomId, fromSeq, toSeq };
 }
 
-export async function handler(
-  event: APIGatewayProxyEventV2
-): Promise<APIGatewayProxyResultV2> {
+export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   console.log(event);
   const parsedParmas = parseEvent(event);
   console.log(parsedParmas);
@@ -37,32 +36,27 @@ export async function handler(
     response = await getRoomDeltas(roomId, fromSeq, toSeq);
   } catch (error) {
     console.error(error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error }),
-    };
+    return { statusCode: 500 };
   }
 
   console.log(response);
 
-  if (response == null || response.Items == null || response.Count === 0) {
-    return {
-      statusCode: 404,
-    };
+  if (response.Items == null || response.Count === 0) {
+    return { statusCode: 404 };
   }
+
+  const deltas: Delta[] = response.Items.map((item) => ({
+    roomId: item.RoomId.S!,
+    seq: parseInt(item.Seq.N!),
+    type: item.Type.S as DeltaType,
+    clientId: item.ClientId.S!,
+  }));
 
   return {
     statusCode: 200,
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify(
-      response.Items.map((item) => ({
-        roomId: item.RoomId.S,
-        seq: parseInt(item.Seq.N!),
-        type: item.Type.S,
-        clientId: item.ClientId.S,
-      }))
-    ),
+    body: JSON.stringify(deltas),
   };
-}
+};
