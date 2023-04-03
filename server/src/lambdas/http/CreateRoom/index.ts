@@ -1,4 +1,4 @@
-import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
+import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { nanoid } from "nanoid";
 
 import { getDynamoDbClient } from "../../../utils/dynamo-db-utils";
@@ -7,9 +7,7 @@ import { createRoomToClientsPlaceholder } from "../../../utils/room-to-clients-u
 
 const dynamoDbClient = getDynamoDbClient(process.env.AWS_REGION!);
 
-export const handler = async (
-  event: APIGatewayProxyEventV2
-): Promise<APIGatewayProxyResultV2> => {
+export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const roomId = nanoid();
 
   console.log(`Creating a new room ${roomId}.`);
@@ -18,20 +16,14 @@ export const handler = async (
     await createRoomSnapshot(dynamoDbClient, roomId);
   } catch (error) {
     console.error("Creating a new room failed.", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error }),
-    };
+    return { statusCode: 500 };
   }
 
   try {
     await createRoomToClientsPlaceholder(dynamoDbClient, roomId);
   } catch (error) {
     console.error("Creating room to clients map failed.", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error }),
-    };
+    return { statusCode: 500 };
   }
 
   console.log(`Creating a new room succeeded.`);
