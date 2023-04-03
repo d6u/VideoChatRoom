@@ -12,7 +12,10 @@ import {
   getDynamoDbClient,
   getSqsClient,
 } from "shared-utils";
-import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js";
+import {
+  errorIsGoneException,
+  postToClient,
+} from "shared-utils/dist/api-gateway-management-utils.js";
 import { createClientToRoomPair } from "shared-utils/dist/client-to-room-utils.js";
 import { addClientToRoom } from "shared-utils/dist/room-to-clients-utils.js";
 import { sendActionToRoomActionsQueue } from "shared-utils/dist/sqs-utils.js";
@@ -50,8 +53,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
 
   postToClient(apiGatewayManagementApi, connectionId, message).catch(
     (error: ApiGatewayManagementApiServiceException) => {
-      if (error.name === "GoneException") {
-        // Or error["$metadata"].httpStatusCode === 410
+      if (errorIsGoneException(error)) {
         console.warn(`found stale connection ${connectionId}`);
       } else {
         console.error(`posting to connection ${connectionId} failed`, error);

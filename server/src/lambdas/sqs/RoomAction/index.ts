@@ -10,7 +10,10 @@ import {
   getApiGatewayManagement,
   getDynamoDbClient,
 } from "shared-utils";
-import { postToClient } from "shared-utils/dist/api-gateway-management-utils.js";
+import {
+  errorIsGoneException,
+  postToClient,
+} from "shared-utils/dist/api-gateway-management-utils.js";
 import {
   applyClientJoinAction,
   applyClientLeftAction,
@@ -129,7 +132,7 @@ async function postToClients(clientIds: string[], roomId: string, data: any) {
     try {
       await postToClient(apiGatewayManagementApi, connectionId, data);
     } catch (error: any) {
-      if (error["$metadata"]?.httpStatusCode === 410) {
+      if (errorIsGoneException(error)) {
         console.warn(`found stale connection ${connectionId}`);
       } else {
         console.error(`posting to connection ${connectionId} failed`, error);

@@ -1,6 +1,7 @@
 import {
   ApiGatewayManagementApi,
   GoneException,
+  PostToConnectionCommandOutput,
 } from "@aws-sdk/client-apigatewaymanagementapi";
 import { WebSocketMessage } from "shared-models";
 
@@ -14,7 +15,7 @@ export async function postToClient(
   await (apiGatewayManagementApi.postToConnection({
     ConnectionId: connectionId,
     Data: encoder.encode(JSON.stringify(data)),
-  }) as Promise<any>);
+  }) as Promise<PostToConnectionCommandOutput>);
 }
 
 export function errorIsGoneException(error: any): error is GoneException {
