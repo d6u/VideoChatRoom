@@ -232,7 +232,8 @@ Resources:
         AllowMethods:
           - "*"
         AllowOrigins:
-          - "*"
+          - !Sub https://${CloudFrontDistribution.DomainName}
+          - http://localhost:3000
 
   # --- HTTP APIs stage ---
   ApiGatewayStageHttpDefault:
