@@ -2,12 +2,12 @@ import classNames from "classnames";
 import { useEffect, useRef, useState } from "react";
 import { Subject, Subscription, takeWhile } from "rxjs";
 import { DirectMessageType } from "shared-models";
+import { exhaustiveMatchingGuard } from "shared-utils";
 
 import ClientPeerConnection, {
   ClientPeerConnectionEventType,
 } from "../../../apis/ClientPeerConnection";
 import webSocketManager from "../../../apis/WebSocketManager";
-import { exhaustiveMatchingGuard } from "../../../utils";
 
 export default function ClientBoxRemote({
   clientId,

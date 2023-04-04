@@ -1,6 +1,6 @@
 import { Subject, Subscription, concatMap, defer, fromEvent } from "rxjs";
+import { exhaustiveMatchingGuard } from "shared-utils";
 
-import { exhaustiveMatchingGuard } from "../utils";
 import Logger from "../utils/Logger";
 
 const WEBRTC_CONFIG = {
@@ -11,22 +11,22 @@ const WEBRTC_CONFIG = {
   ],
 };
 
-enum PeerConnectionManagerCommandType {
+enum CommandType {
   HandleRemoteDescription = "HandleRemoteDescription",
   CreateOffer = "CreateOffer",
   AddIceCandidate = "AddIceCandidate",
 }
 
-type PeerConnectionManagerCommand =
+type Command =
   | {
-      type: PeerConnectionManagerCommandType.HandleRemoteDescription;
+      type: CommandType.HandleRemoteDescription;
       description: RTCSessionDescriptionInit;
     }
   | {
-      type: PeerConnectionManagerCommandType.CreateOffer;
+      type: CommandType.CreateOffer;
     }
   | {
-      type: PeerConnectionManagerCommandType.AddIceCandidate;
+      type: CommandType.AddIceCandidate;
       candidate: RTCIceCandidateInit;
     };
 
@@ -35,13 +35,12 @@ export default class PeerConnectionManager {
   tracksSubject = new Subject<RTCTrackEvent>();
   descriptionsSubject = new Subject<RTCSessionDescriptionInit>();
 
-  subscription = new Subscription();
-  remoteIceCandidates: RTCIceCandidateInit[] = [];
-  commandsSubject = new Subject<PeerConnectionManagerCommand>();
-
   private logger: Logger;
   private pc: RTCPeerConnection | null = null;
   private isPolite: boolean;
+  private subscription = new Subscription();
+  private remoteIceCandidates: RTCIceCandidateInit[] = [];
+  private commandsSubject = new Subject<Command>();
 
   constructor(isPolite: boolean) {
     this.logger = new Logger(`PeerConnectionManager`);
@@ -65,13 +64,14 @@ export default class PeerConnectionManager {
         ) {
           this.logger.log(`add cached ice candidates`);
 
+          const candidates = this.remoteIceCandidates;
+          this.remoteIceCandidates = [];
+
           Promise.all(
-            this.remoteIceCandidates.map((iceCandidate) =>
-              this.pc!.addIceCandidate(new RTCIceCandidate(iceCandidate))
+            candidates.map((candidate) =>
+              this.pc!.addIceCandidate(new RTCIceCandidate(candidate))
             )
-          ).then(() => {
-            this.remoteIceCandidates = [];
-          });
+          );
         }
       })
     );
@@ -82,7 +82,7 @@ export default class PeerConnectionManager {
           `negotiation needed`,
           `signaling state = ${this.pc!.signalingState}`
         );
-        this.addCommand({ type: PeerConnectionManagerCommandType.CreateOffer });
+        this.addCommand({ type: CommandType.CreateOffer });
       })
     );
 
@@ -106,7 +106,7 @@ export default class PeerConnectionManager {
 
     this.subscription.add(
       this.commandsSubject
-        .pipe(concatMap(this.createCommandHandlerObservable))
+        .pipe(concatMap((command) => defer(() => this.handleCommand(command))))
         .subscribe()
     );
   }
@@ -120,14 +120,14 @@ export default class PeerConnectionManager {
 
   handleRemoteDescription(description: RTCSessionDescriptionInit) {
     this.addCommand({
-      type: PeerConnectionManagerCommandType.HandleRemoteDescription,
+      type: CommandType.HandleRemoteDescription,
       description,
     });
   }
 
   addIceCandidate(candidate: RTCIceCandidateInit) {
     this.addCommand({
-      type: PeerConnectionManagerCommandType.AddIceCandidate,
+      type: CommandType.AddIceCandidate,
       candidate,
     });
   }
@@ -137,72 +137,68 @@ export default class PeerConnectionManager {
     this.pc!.addTrack(track, stream);
   }
 
-  private addCommand(command: PeerConnectionManagerCommand) {
+  private addCommand(command: Command) {
     this.logger.log(`*** adding command: ${command.type}`);
     this.commandsSubject.next(command);
   }
 
-  private createCommandHandlerObservable = (
-    command: PeerConnectionManagerCommand
-  ) => {
-    return defer(async () => {
-      console.group("executing command");
-      this.logger.log(`>>> executing command: ${command.type}`, command);
+  private async handleCommand(command: Command) {
+    console.group("executing command");
+    this.logger.log(`>>> executing command: ${command.type}`, command);
 
-      switch (command.type) {
-        case PeerConnectionManagerCommandType.HandleRemoteDescription: {
-          const { description } = command;
+    switch (command.type) {
+      case CommandType.HandleRemoteDescription: {
+        const { description } = command;
+
+        this.logger.log(
+          `received remote description:`,
+          `type = ${description.type},`,
+          `is polite = ${this.isPolite},`,
+          `signaling state = ${this.pc!.signalingState}`
+        );
+
+        if (
+          description.type === "offer" &&
+          this.pc!.signalingState !== "stable"
+        ) {
+          if (!this.isPolite) {
+            this.logger.log("received offer but not polite, ignoring");
+            break;
+          }
 
           this.logger.log(
-            `received remote description:`,
-            `type = ${description.type},`,
-            `is polite = ${this.isPolite},`,
-            `signaling state = ${this.pc!.signalingState}`
+            "setting remote description (implicitly rollback local description)"
           );
-
-          if (
-            description.type === "offer" &&
-            this.pc!.signalingState !== "stable"
-          ) {
-            if (!this.isPolite) {
-              this.logger.log("received offer but not polite, ignoring");
-              break;
-            }
-
-            this.logger.log(
-              "setting remote description (implicitly rollback local description)"
-            );
-            await this.setRemoteDescription(description);
-          } else {
-            this.logger.log(
-              "setting remote description (won't rollback local description)"
-            );
-            await this.setRemoteDescription(description);
-          }
-
-          if (description.type === "offer") {
-            this.logger.log("creating answer in response to remote offer");
-            const answer = await this.createAnswer();
-            this.descriptionsSubject.next(answer!);
-          }
-          break;
+          await this.setRemoteDescription(description);
+        } else {
+          this.logger.log(
+            "setting remote description (won't rollback local description)"
+          );
+          await this.setRemoteDescription(description);
         }
-        case PeerConnectionManagerCommandType.CreateOffer: {
-          const offer = await this.createOffer();
-          this.descriptionsSubject.next(offer!);
-          break;
+
+        if (description.type === "offer") {
+          this.logger.log("creating answer in response to remote offer");
+          const answer = await this.createAnswer();
+          this.descriptionsSubject.next(answer!);
         }
-        case PeerConnectionManagerCommandType.AddIceCandidate:
-          await this.addIceCandidateInternal(command.candidate);
-          break;
-        default:
-          exhaustiveMatchingGuard(command);
+        break;
       }
+      case CommandType.CreateOffer: {
+        const offer = await this.createOffer();
+        this.descriptionsSubject.next(offer!);
+        break;
+      }
+      case CommandType.AddIceCandidate:
+        await this.addIceCandidateInternal(command.candidate);
+        break;
+      default:
+        exhaustiveMatchingGuard(command);
+    }
 
-      this.logger.log(`<<< finish executing command: ${command.type}`, command);
-      console.groupEnd();
-    });
-  };
+    this.logger.log(`<<< finish executing command: ${command.type}`, command);
+    console.groupEnd();
+  }
 
   private async createOffer() {
     try {

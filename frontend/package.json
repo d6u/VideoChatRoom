@@ -19,6 +19,7 @@
     "react-scripts": "5.0.1",
     "rxjs": "^7.8.0",
     "shared-models": "file:../shared/shared-models",
+    "shared-utils": "file:../shared/shared-utils",
     "typescript": "^4.9.5",
     "web-vitals": "^2.1.4"
   },

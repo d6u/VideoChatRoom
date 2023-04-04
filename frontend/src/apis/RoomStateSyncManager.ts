@@ -21,6 +21,7 @@ import {
   WebSocketMessage,
   isDeltaMessage,
 } from "shared-models";
+import { exhaustiveMatchingGuard } from "shared-utils";
 
 import {
   ClientJoinDeltaRecord,
@@ -28,7 +29,6 @@ import {
   DeltaRecord,
 } from "../models/Delta";
 import SnapshotRecord from "../models/Snapshot";
-import { exhaustiveMatchingGuard } from "../utils";
 import Logger from "../utils/Logger";
 import { sort } from "../utils/operators";
 import { getRoomDeltas, getRoomSnapshot, isSnapshotOkResponse } from "./Api";
