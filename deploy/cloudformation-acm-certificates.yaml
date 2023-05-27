@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  This template is for creating ACM Certificates in us-east-1 region.
+Resources:
+  # --- ACM ---
+  AcmCertificateFrontendDomain:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: "*.daiwei.lu"
+      DomainValidationOptions:
+        - DomainName: "*.daiwei.lu"
+          # The HostedZone is managed manually to prevent errors in automation
+          HostedZoneId: Z0918167TAPNANZ73C9D
+      ValidationMethod: DNS
+Outputs:
+  AcmCertificateFrontendDomainArn:
+    Value: !Ref AcmCertificateFrontendDomain
