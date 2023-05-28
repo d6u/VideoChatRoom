@@ -4,6 +4,12 @@ Description: >
 Parameters:
   ServerSourceS3Key:
     Type: String
+  CloudFrontDistributionCertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:736167550324:certificate/3372940b-ab61-40b5-9611-5ae29747f55c
+    Description: >
+      This value is obtained from the outputs of
+      deploy/cloudformation-acm-certificates.yaml template.
 Resources:
   # --- Lambda IAM ---
   IamRoleLambdaShared:
@@ -118,7 +124,7 @@ Resources:
         Aliases:
           - gameroom-beta.daiwei.lu
         ViewerCertificate:
-          AcmCertificateArn: arn:aws:acm:us-east-1:736167550324:certificate/3372940b-ab61-40b5-9611-5ae29747f55c
+          AcmCertificateArn: !Ref CloudFrontDistributionCertificateArn
           SslSupportMethod: sni-only
         # --- END ---
         HttpVersion: http2and3
@@ -262,10 +268,7 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiHttp
       RouteKey: "POST /rooms"
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationCreateRoom
+      Target: !Join ["/", [integrations, !Ref ApiGatewayIntegrationCreateRoom]]
   ApiGatewayIntegrationCreateRoom:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -273,7 +276,7 @@ Resources:
       IntegrationMethod: GET
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt LambdaFunctionCreateRoom.Arn
-      PayloadFormatVersion: 2.0
+      PayloadFormatVersion: "2.0"
   LambdaFunctionCreateRoom:
     Type: AWS::Lambda::Function
     Properties:
@@ -307,10 +310,8 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiHttp
       RouteKey: "GET /rooms/{roomId}/deltas"
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationGetRoomDeltas
+      Target:
+        !Join ["/", [integrations, !Ref ApiGatewayIntegrationGetRoomDeltas]]
   ApiGatewayIntegrationGetRoomDeltas:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -318,7 +319,7 @@ Resources:
       IntegrationMethod: GET
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt LambdaFunctionGetRoomDeltas.Arn
-      PayloadFormatVersion: 2.0
+      PayloadFormatVersion: "2.0"
   LambdaFunctionGetRoomDeltas:
     Type: AWS::Lambda::Function
     Properties:
@@ -352,10 +353,8 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiHttp
       RouteKey: "GET /rooms/{roomId}/snapshot"
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationGetRoomSnapshot
+      Target:
+        !Join ["/", [integrations, !Ref ApiGatewayIntegrationGetRoomSnapshot]]
   ApiGatewayIntegrationGetRoomSnapshot:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -363,7 +362,7 @@ Resources:
       IntegrationMethod: GET
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt LambdaFunctionGetRoomSnapshot.Arn
-      PayloadFormatVersion: 2.0
+      PayloadFormatVersion: "2.0"
   LambdaFunctionGetRoomSnapshot:
     Type: AWS::Lambda::Function
     Properties:
@@ -421,10 +420,7 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
       RouteKey: $connect
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationConnect
+      Target: !Join ["/", [integrations, !Ref ApiGatewayIntegrationConnect]]
   ApiGatewayIntegrationConnect:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -458,10 +454,7 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
       RouteKey: $default
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationDefault
+      Target: !Join ["/", [integrations, !Ref ApiGatewayIntegrationDefault]]
   ApiGatewayIntegrationDefault:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -507,10 +500,7 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
       RouteKey: $disconnect
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationDisconnect
+      Target: !Join ["/", [integrations, !Ref ApiGatewayIntegrationDisconnect]]
   ApiGatewayIntegrationDisconnect:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -551,10 +541,7 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
       RouteKey: JoinRoom
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationJoinRoom
+      Target: !Join ["/", [integrations, !Ref ApiGatewayIntegrationJoinRoom]]
   ApiGatewayIntegrationJoinRoom:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -596,10 +583,8 @@ Resources:
     Properties:
       ApiId: !Ref ApiGatewayApiWebSocket
       RouteKey: DirectMessage
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref ApiGatewayIntegrationDirectMessage
+      Target:
+        !Join ["/", [integrations, !Ref ApiGatewayIntegrationDirectMessage]]
   ApiGatewayIntegrationDirectMessage:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -676,10 +661,7 @@ Outputs:
   HttpEndpointUrl:
     Value: !GetAtt ApiGatewayApiHttp.ApiEndpoint
   WebSocketEndpointUrl:
-    Value: !Join
-      - /
-      - - !GetAtt ApiGatewayApiWebSocket.ApiEndpoint
-        - staging
+    Value: !Join ["/", [!GetAtt ApiGatewayApiWebSocket.ApiEndpoint, staging]]
   S3BucketFrontEndName:
     Value: !Ref S3BucketFrontEnd
   CloudFrontDomainName:
