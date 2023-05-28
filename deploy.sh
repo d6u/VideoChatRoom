@@ -57,7 +57,7 @@ aws s3 sync build s3://gameroom-deployment/build
 
 printf "\n>>> Deploying using CloudFormation...\n"
 aws cloudformation deploy \
-  --template-file cloudformation-template.yaml \
+  --template-file deploy/cloudformation-template.yaml \
   --stack-name GameroomStack \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides ServerSourceS3Key=$SOURCE_ZIP

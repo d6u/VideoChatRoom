@@ -1,15 +1,3 @@
-## Deploy
+# Video Chat Room
 
-For both server and frontend:
-
-```
-./deploy.sh
-```
-
-## Destroy
-
-Manually remove CloudFormation stack:
-
-```
-aws cloudformation delete-stack --stack-name GameroomStack
-```
+See [deploy/README.md](deploy/README.md) for deployment instructions.

@@ -118,7 +118,7 @@ Resources:
         Aliases:
           - gameroom-beta.daiwei.lu
         ViewerCertificate:
-          AcmCertificateArn: arn:aws:acm:us-east-1:736167550324:certificate/02006272-02a8-4a8b-a122-93b8827123c0
+          AcmCertificateArn: arn:aws:acm:us-east-1:736167550324:certificate/3372940b-ab61-40b5-9611-5ae29747f55c
           SslSupportMethod: sni-only
         # --- END ---
         HttpVersion: http2and3

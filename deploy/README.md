@@ -1,5 +1,7 @@
 # Deploy
 
+_All commands should run at repo root, unless otherwise specified._
+
 ## Prerequisites
 
 ### AWS ClI
@@ -55,3 +57,15 @@ This section describes development of shared resources across stacks.
    - `--template-file`: The CloudFormation template that AWS resources will be created from.
    - `--stack-name`: The name of the CloudFormation Stack.
    - `--capabilities`: Allow the template to create IAM resources.
+
+### Gameroom
+
+```sh
+./deploy.sh
+```
+
+## Undeploy
+
+```
+aws cloudformation delete-stack --stack-name DaiweiLuCerts
+```
