@@ -19,7 +19,7 @@ import {
   isLeaderSelectionMessage,
 } from "shared-models";
 
-import endpoints from "../api_endpoints.json";
+import { WEB_SOCKET_ENDPOINT_URL } from "../constants";
 import Logger from "../utils/Logger";
 
 class WebSocketManager {
@@ -39,7 +39,7 @@ class WebSocketManager {
     // Cannot provide specific type for WebSocketSubject because the provided
     // type definition force incoming and outgoing message to be the same type.
     this.webSocketSubject = webSocket<any>({
-      url: endpoints.WebSocketEndpointUrl,
+      url: WEB_SOCKET_ENDPOINT_URL,
       openObserver: {
         next: () => {
           this.logger.debug("^^^ connection open");

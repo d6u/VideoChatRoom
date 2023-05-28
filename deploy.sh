@@ -63,10 +63,14 @@ aws cloudformation deploy \
   --parameter-overrides ServerSourceS3Key=$SOURCE_ZIP
 
 printf "\n>>> Saving the CloudFormation output to a JSON file...\n"
-aws cloudformation describe-stacks --stack-name GameroomStack | jq ".Stacks[0].Outputs | map({(.OutputKey): .OutputValue}) | add" > frontend/src/api_endpoints.json
+
+aws cloudformation describe-stacks \
+  --stack-name GameroomStack \
+  | jq -r '(.Stacks[0].Outputs)[] | "REACT_APP_\(.OutputKey | gsub("(?<a>[a-z])(?<b>[A-Z])"; "\(.a)_\(.b)") | ascii_upcase)=\(.OutputValue)"' \
+  > frontend/.env
 
 printf "\n>>> The output of CloudFormation is:\n"
-cat frontend/src/api_endpoints.json
+cat frontend/.env
 
 # Enter /frontend
 pushd frontend

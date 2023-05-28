@@ -1,6 +1,6 @@
 import { Delta, Snapshot } from "shared-models";
 
-import endpoints from "../api_endpoints.json";
+import { HTTP_ENDPOINT_URL } from "../constants";
 
 export async function createRoom(): Promise<
   | {
@@ -12,7 +12,7 @@ export async function createRoom(): Promise<
       roomData: { roomId: string };
     }
 > {
-  const response = await fetch(`${endpoints.HttpEndpointUrl}/rooms`, {
+  const response = await fetch(`${HTTP_ENDPOINT_URL}/rooms`, {
     method: "POST",
     mode: "cors",
   });
@@ -38,7 +38,7 @@ export async function getRoomSnapshot(
   roomId: string
 ): Promise<GetRoomSnapsotResponse> {
   const response = await fetch(
-    `${endpoints.HttpEndpointUrl}/rooms/${roomId}/snapshot`,
+    `${HTTP_ENDPOINT_URL}/rooms/${roomId}/snapshot`,
     {
       method: "GET",
       mode: "cors",
@@ -64,7 +64,7 @@ export async function getRoomDeltas(
   toSeq: number
 ): Promise<Delta[]> {
   const response = await fetch(
-    `${endpoints.HttpEndpointUrl}/rooms/${roomId}/deltas?fromSeq=${fromSeq}&toSeq=${toSeq}`,
+    `${HTTP_ENDPOINT_URL}/rooms/${roomId}/deltas?fromSeq=${fromSeq}&toSeq=${toSeq}`,
     {
       method: "GET",
       mode: "cors",

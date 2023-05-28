@@ -662,7 +662,3 @@ Outputs:
     Value: !GetAtt ApiGatewayApiHttp.ApiEndpoint
   WebSocketEndpointUrl:
     Value: !Join ["/", [!GetAtt ApiGatewayApiWebSocket.ApiEndpoint, staging]]
-  S3BucketFrontEndName:
-    Value: !Ref S3BucketFrontEnd
-  CloudFrontDomainName:
-    Value: !GetAtt CloudFrontDistribution.DomainName
